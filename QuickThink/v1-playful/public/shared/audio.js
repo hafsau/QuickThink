@@ -13,18 +13,30 @@ class AudioManager {
 
     // Volume levels
     this.volumes = {
-      master: 0.7,
-      music: 0.3,
-      sfx: 0.6
+      master: 1.0,
+      music: 0.8,
+      sfx: 0.8
     };
   }
 
   // Must be called after user interaction (click/tap)
   async init() {
-    if (this.isInitialized) return;
+    if (this.isInitialized) {
+      console.log('Audio already initialized');
+      return;
+    }
 
     try {
+      console.log('Creating AudioContext...');
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      console.log('AudioContext created, state:', this.ctx.state);
+
+      // Force resume if needed
+      if (this.ctx.state === 'suspended') {
+        console.log('Context suspended, resuming...');
+        await this.ctx.resume();
+        console.log('Context resumed, new state:', this.ctx.state);
+      }
 
       // Create gain nodes
       this.masterGain = this.ctx.createGain();
@@ -40,17 +52,71 @@ class AudioManager {
       this.sfxGain.connect(this.masterGain);
 
       this.isInitialized = true;
-      console.log('Audio system initialized');
+      console.log('✓ Audio system initialized successfully');
+      console.log('Master gain:', this.masterGain.gain.value);
+      console.log('Music gain:', this.musicGain.gain.value);
+      console.log('SFX gain:', this.sfxGain.gain.value);
+      console.log('isMuted:', this.isMuted);
     } catch (e) {
-      console.warn('Audio initialization failed:', e);
+      console.error('❌ Audio initialization failed:', e);
     }
   }
 
   // Resume context if suspended (required by browsers)
   async resume() {
     if (this.ctx && this.ctx.state === 'suspended') {
+      console.log('Resuming suspended audio context...');
       await this.ctx.resume();
+      console.log('Audio context resumed, state:', this.ctx.state);
     }
+  }
+
+  // Test beep - simple sound to verify audio works
+  async testBeep() {
+    console.log('TEST BEEP called');
+    console.log('Context exists:', !!this.ctx);
+    console.log('Context state BEFORE resume:', this.ctx?.state);
+
+    if (!this.ctx) {
+      console.error('No audio context!');
+      return;
+    }
+
+    // Force resume the context
+    if (this.ctx.state === 'suspended') {
+      console.log('Context is suspended, forcing resume...');
+      try {
+        await this.ctx.resume();
+        console.log('Resume called, new state:', this.ctx.state);
+      } catch (e) {
+        console.error('Resume failed:', e);
+      }
+    }
+
+    console.log('Context state AFTER resume:', this.ctx.state);
+    console.log('Context currentTime:', this.ctx.currentTime);
+    console.log('Context destination:', this.ctx.destination);
+
+    console.log('Creating test oscillator...');
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.value = 440; // A4 note
+    gain.gain.value = 0.5; // Louder for testing
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination); // Connect directly to output
+
+    console.log('Starting test beep at currentTime:', this.ctx.currentTime);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.5);
+    console.log('Test beep scheduled, should play for 0.5 seconds');
+
+    // Log state after a moment
+    setTimeout(() => {
+      console.log('After 100ms - Context state:', this.ctx.state, 'currentTime:', this.ctx.currentTime);
+    }, 100);
   }
 
   // Toggle mute
@@ -372,182 +438,327 @@ class AudioManager {
     }
   }
 
-  // Play lobby music - chill, anticipatory
+  // Play lobby music - fun, catchy party game style!
   playLobbyMusic() {
     if (!this.ctx || this.isMuted) return;
     this.stopMusic();
 
-    const nodes = [];
+    this.currentMusic = [{ active: true }]; // Flag to track if music should play
+    const isActive = () => this.currentMusic && this.currentMusic[0]?.active;
 
-    // Simple ambient pad
-    const createPad = (freq, detune = 0) => {
-      const osc = this.ctx.createOscillator();
-      const filter = this.ctx.createBiquadFilter();
-      const gain = this.ctx.createGain();
+    const bpm = 140;
+    const beatTime = 60 / bpm;
 
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      osc.detune.value = detune;
+    // Catchy melody - think party game!
+    const melody = [
+      // Bar 1
+      { note: 'E5', time: 0, dur: 0.5 },
+      { note: 'G5', time: 0.5, dur: 0.5 },
+      { note: 'A5', time: 1, dur: 0.5 },
+      { note: 'G5', time: 1.5, dur: 0.5 },
+      // Bar 2
+      { note: 'E5', time: 2, dur: 1 },
+      { note: 'D5', time: 3, dur: 0.5 },
+      { note: 'E5', time: 3.5, dur: 0.5 },
+      // Bar 3
+      { note: 'G5', time: 4, dur: 0.5 },
+      { note: 'A5', time: 4.5, dur: 0.5 },
+      { note: 'B5', time: 5, dur: 0.5 },
+      { note: 'A5', time: 5.5, dur: 0.5 },
+      // Bar 4
+      { note: 'G5', time: 6, dur: 1.5 },
+      { note: 'E5', time: 7.5, dur: 0.5 },
+    ];
 
-      filter.type = 'lowpass';
-      filter.frequency.value = 800;
+    // Bouncy bass line
+    const bassLine = [
+      { note: 'C3', time: 0 }, { note: 'C3', time: 0.5 }, { note: 'G3', time: 1 }, { note: 'G3', time: 1.5 },
+      { note: 'A2', time: 2 }, { note: 'A2', time: 2.5 }, { note: 'E3', time: 3 }, { note: 'E3', time: 3.5 },
+      { note: 'F3', time: 4 }, { note: 'F3', time: 4.5 }, { note: 'C3', time: 5 }, { note: 'C3', time: 5.5 },
+      { note: 'G2', time: 6 }, { note: 'G2', time: 6.5 }, { note: 'G2', time: 7 }, { note: 'B2', time: 7.5 },
+    ];
 
-      gain.gain.value = 0.08;
-
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.musicGain);
-
-      osc.start();
-      nodes.push(osc);
-      return osc;
+    // Note frequencies
+    const noteFreq = {
+      'G2': 98, 'A2': 110, 'B2': 123.5, 'C3': 130.8, 'E3': 164.8, 'F3': 174.6, 'G3': 196,
+      'D5': 587.3, 'E5': 659.3, 'G5': 784, 'A5': 880, 'B5': 987.8
     };
 
-    // Create warm pad chord (C major 7)
-    createPad(130.81); // C3
-    createPad(164.81, 5); // E3
-    createPad(196.00, -5); // G3
-    createPad(246.94); // B3
+    const loopDuration = 8 * beatTime * 1000; // 8 beats
 
-    // Add subtle LFO modulation
-    const lfo = this.ctx.createOscillator();
-    const lfoGain = this.ctx.createGain();
-    lfo.frequency.value = 0.2;
-    lfoGain.gain.value = 3;
-    lfo.connect(lfoGain);
-    nodes.forEach(osc => {
-      if (osc.detune) {
-        lfoGain.connect(osc.detune);
+    const playLoop = () => {
+      if (!isActive()) return;
+
+      // Play melody notes
+      melody.forEach(({ note, time, dur }) => {
+        setTimeout(() => {
+          if (!isActive()) return;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'square';
+          osc.frequency.value = noteFreq[note];
+
+          gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + dur * beatTime);
+
+          osc.connect(gain);
+          gain.connect(this.musicGain);
+          osc.start();
+          osc.stop(this.ctx.currentTime + dur * beatTime);
+        }, time * beatTime * 1000);
+      });
+
+      // Play bass notes
+      bassLine.forEach(({ note, time }) => {
+        setTimeout(() => {
+          if (!isActive()) return;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'triangle';
+          osc.frequency.value = noteFreq[note];
+
+          gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + beatTime * 0.4);
+
+          osc.connect(gain);
+          gain.connect(this.musicGain);
+          osc.start();
+          osc.stop(this.ctx.currentTime + beatTime * 0.5);
+        }, time * beatTime * 1000);
+      });
+
+      // Play percussion hits
+      for (let i = 0; i < 8; i++) {
+        setTimeout(() => {
+          if (!isActive()) return;
+          this.playPercHit(i % 2 === 0 ? 'kick' : 'hat');
+        }, i * beatTime * 1000);
       }
-    });
-    lfo.start();
-    nodes.push(lfo);
 
-    this.currentMusic = nodes;
+      setTimeout(playLoop, loopDuration);
+    };
+
+    playLoop();
   }
 
-  // Play gameplay music - upbeat, energetic
+  // Helper for percussion sounds
+  playPercHit(type) {
+    if (!this.ctx) return;
+
+    const gain = this.ctx.createGain();
+    gain.connect(this.musicGain);
+
+    if (type === 'kick') {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+      osc.connect(gain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.15);
+    } else if (type === 'hat') {
+      // Hi-hat using filtered noise
+      const bufferSize = this.ctx.sampleRate * 0.05;
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.value = 7000;
+
+      gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      noise.start();
+    }
+  }
+
+  // Play gameplay music - super energetic and fast!
   playGameplayMusic() {
     if (!this.ctx || this.isMuted) return;
     this.stopMusic();
 
     const nodes = [];
-    const now = this.ctx.currentTime;
 
-    // Bass line with simple pattern
-    const bass = this.ctx.createOscillator();
-    const bassGain = this.ctx.createGain();
-
-    bass.type = 'triangle';
-    bass.frequency.value = 110;
-    bassGain.gain.value = 0.12;
-
-    bass.connect(bassGain);
-    bassGain.connect(this.musicGain);
-    bass.start();
-    nodes.push(bass);
-
-    // Rhythmic pulse
-    const pulse = () => {
-      if (!this.currentMusic || !this.currentMusic.includes(bass)) return;
-
+    // Create continuous background chord - G major
+    const createChordNote = (freq) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
-      osc.type = 'square';
-      osc.frequency.value = 220;
-
-      gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.value = 0.12;
 
       osc.connect(gain);
       gain.connect(this.musicGain);
-
       osc.start();
-      osc.stop(this.ctx.currentTime + 0.1);
 
-      setTimeout(pulse, 500);
+      nodes.push(osc);
     };
 
-    setTimeout(pulse, 250);
+    createChordNote(392.00); // G4
+    createChordNote(493.88); // B4
+    createChordNote(587.33); // D5
+
+    // Fast rhythm pattern
+    const rhythmPattern = () => {
+      if (!this.currentMusic || this.currentMusic.length === 0) return;
+
+      [880, 1046.5, 1318.5, 1046.5].forEach((freq, i) => {
+        setTimeout(() => {
+          if (!this.currentMusic || this.currentMusic.length === 0) return;
+
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'triangle';
+          osc.frequency.value = freq;
+
+          gain.gain.setValueAtTime(0.22, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+          osc.connect(gain);
+          gain.connect(this.musicGain);
+
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.15);
+        }, i * 150);
+      });
+
+      setTimeout(rhythmPattern, 800);
+    };
 
     this.currentMusic = nodes;
+    rhythmPattern();
   }
 
-  // Play tense music - for typing phase
+  // Play tense music - super fast and exciting for typing phase!
   playTenseMusic() {
     if (!this.ctx || this.isMuted) return;
     this.stopMusic();
 
     const nodes = [];
 
-    // Tense drone
-    const drone = this.ctx.createOscillator();
-    const droneGain = this.ctx.createGain();
+    // Create continuous background chord - D major (energetic)
+    const createChordNote = (freq) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
 
-    drone.type = 'sawtooth';
-    drone.frequency.value = 55;
-    droneGain.gain.value = 0.06;
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.value = 0.1;
 
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 400;
+      osc.connect(gain);
+      gain.connect(this.musicGain);
+      osc.start();
 
-    drone.connect(filter);
-    filter.connect(droneGain);
-    droneGain.connect(this.musicGain);
-    drone.start();
-    nodes.push(drone);
+      nodes.push(osc);
+    };
 
-    // Pulsing high note
-    const highOsc = this.ctx.createOscillator();
-    const highGain = this.ctx.createGain();
-    const highLfo = this.ctx.createOscillator();
-    const highLfoGain = this.ctx.createGain();
+    createChordNote(587.33); // D5
+    createChordNote(739.99); // F#5
+    createChordNote(880.00); // A5
 
-    highOsc.type = 'sine';
-    highOsc.frequency.value = 440;
-    highGain.gain.value = 0.04;
+    // Very fast pattern
+    const fastPattern = () => {
+      if (!this.currentMusic || this.currentMusic.length === 0) return;
 
-    highLfo.frequency.value = 4;
-    highLfoGain.gain.value = 0.03;
+      [1318.5, 1568.0, 1318.5, 1174.7].forEach((freq, i) => {
+        setTimeout(() => {
+          if (!this.currentMusic || this.currentMusic.length === 0) return;
 
-    highLfo.connect(highLfoGain);
-    highLfoGain.connect(highGain.gain);
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
 
-    highOsc.connect(highGain);
-    highGain.connect(this.musicGain);
+          osc.type = 'triangle';
+          osc.frequency.value = freq;
 
-    highOsc.start();
-    highLfo.start();
-    nodes.push(highOsc, highLfo);
+          gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+
+          osc.connect(gain);
+          gain.connect(this.musicGain);
+
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.12);
+        }, i * 100);
+      });
+
+      setTimeout(fastPattern, 500);
+    };
 
     this.currentMusic = nodes;
+    fastPattern();
   }
 
-  // Play reveal music - dramatic
+  // Play reveal music - bright, exciting anticipation!
   playRevealMusic() {
     if (!this.ctx || this.isMuted) return;
     this.stopMusic();
 
     const nodes = [];
 
-    // Suspenseful low pad
-    [65.41, 77.78, 98].forEach((freq, i) => {
+    // Create continuous background chord - A major (anticipation)
+    const createChordNote = (freq) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
       osc.type = 'sine';
       osc.frequency.value = freq;
-      gain.gain.value = 0.06;
+      gain.gain.value = 0.12;
 
       osc.connect(gain);
       gain.connect(this.musicGain);
       osc.start();
+
       nodes.push(osc);
-    });
+    };
+
+    createChordNote(440.00); // A4
+    createChordNote(554.37); // C#5
+    createChordNote(659.25); // E5
+
+    // Exciting drumroll pattern
+    const revealPattern = () => {
+      if (!this.currentMusic || this.currentMusic.length === 0) return;
+
+      [880, 1046.5, 1174.7, 1318.5].forEach((freq, i) => {
+        setTimeout(() => {
+          if (!this.currentMusic || this.currentMusic.length === 0) return;
+
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'triangle';
+          osc.frequency.value = freq;
+
+          gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+          osc.connect(gain);
+          gain.connect(this.musicGain);
+
+          osc.start();
+          osc.stop(this.ctx.currentTime + 0.3);
+        }, i * 200);
+      });
+
+      setTimeout(revealPattern, 1000);
+    };
 
     this.currentMusic = nodes;
+    revealPattern();
   }
 
   // Crossfade to new music

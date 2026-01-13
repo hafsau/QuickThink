@@ -203,12 +203,17 @@ class QuickThinkTV {
       }));
       this.showScreen('lobby');
 
-      // Start lobby music after a short delay (requires user interaction first)
-      setTimeout(async () => {
-        if (audioManager.isInitialized) {
-          audioManager.playLobbyMusic();
-        }
-      }, 500);
+      // Initialize audio and start lobby music on user interaction
+      const startLobbyMusic = async () => {
+        await ensureAudioInit();
+        audioManager.playLobbyMusic();
+        document.removeEventListener('click', startLobbyMusic);
+        document.removeEventListener('touchstart', startLobbyMusic);
+        document.removeEventListener('keydown', startLobbyMusic);
+      };
+      document.addEventListener('click', startLobbyMusic, { once: true });
+      document.addEventListener('touchstart', startLobbyMusic, { once: true });
+      document.addEventListener('keydown', startLobbyMusic, { once: true });
     };
 
     this.ws.onmessage = (event) => {

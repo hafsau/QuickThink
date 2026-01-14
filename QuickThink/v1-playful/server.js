@@ -9,6 +9,10 @@ const QRCode = require('qrcode');
 const os = require('os');
 
 const { GameState, PHASES, TIMING } = require('./game/GameState');
+const { isValidWord, loadDictionary } = require('./game/wordValidation');
+
+// Load dictionary at startup
+loadDictionary();
 
 const app = express();
 const server = http.createServer(app);
@@ -91,6 +95,16 @@ app.get('/api/qr/:roomCode', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to generate QR code' });
   }
+});
+
+// API endpoint to validate a word
+app.get('/api/validate-word', (req, res) => {
+  const word = req.query.word;
+  if (!word) {
+    return res.json({ valid: false, reason: 'No word provided' });
+  }
+  const result = isValidWord(word);
+  res.json(result);
 });
 
 // Broadcast to all clients in a room
@@ -251,9 +265,142 @@ function revealNextAnswer(roomCode) {
 
     setTimeout(() => revealNextAnswer(roomCode), TIMING.REVEAL_PER_ANSWER);
   } else {
-    // All answers revealed, move to scoring
+    // All answers revealed, move to audit phase
+    runAudit(roomCode);
+  }
+}
+
+// Audit phase: host can challenge answers
+function runAudit(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+
+  room.startAudit();
+
+  broadcast(roomCode, {
+    type: 'PHASE_CHANGE',
+    payload: {
+      phase: PHASES.AUDIT,
+      answers: room.getAuditAnswers(),
+      category: room.currentCategory,
+      timer: room.timerValue
+    }
+  });
+
+  // Countdown timer for audit phase
+  let remaining = room.timerValue;
+  const auditInterval = setInterval(() => {
+    remaining--;
+    room.timerValue = remaining;
+
+    broadcast(roomCode, {
+      type: 'TIMER',
+      payload: { remaining }
+    });
+
+    if (remaining <= 0) {
+      clearInterval(auditInterval);
+      // End audit and start voting or scoring
+      endAuditPhase(roomCode);
+    }
+  }, 1000);
+
+  // Store interval so host can end it early
+  room.auditInterval = auditInterval;
+}
+
+// End audit phase and proceed to voting or scoring
+function endAuditPhase(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+
+  // Clear any running interval
+  if (room.auditInterval) {
+    clearInterval(room.auditInterval);
+    room.auditInterval = null;
+  }
+
+  if (room.hasChallengedAnswers()) {
+    // Start voting on challenged answers
+    runVoting(roomCode);
+  } else {
+    // No challenges, go directly to scoring
     runScoring(roomCode);
   }
+}
+
+// Voting phase: players vote on challenged answer
+function runVoting(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+
+  const challenge = room.startNextVote();
+  if (!challenge) {
+    // No more challenges, proceed to scoring
+    runScoring(roomCode);
+    return;
+  }
+
+  broadcast(roomCode, {
+    type: 'PHASE_CHANGE',
+    payload: {
+      phase: PHASES.VOTING,
+      challenge: {
+        index: challenge.index,
+        answer: challenge.answer.answer,
+        playerName: challenge.answer.playerName,
+        playerId: challenge.answer.playerId
+      },
+      category: room.currentCategory,
+      timer: room.timerValue
+    }
+  });
+
+  // Countdown timer for voting
+  let remaining = room.timerValue;
+  const voteInterval = setInterval(() => {
+    remaining--;
+    room.timerValue = remaining;
+
+    broadcast(roomCode, {
+      type: 'TIMER',
+      payload: { remaining }
+    });
+
+    if (remaining <= 0) {
+      clearInterval(voteInterval);
+      endVotingRound(roomCode);
+    }
+  }, 1000);
+
+  room.voteInterval = voteInterval;
+}
+
+// End current voting round and show results
+function endVotingRound(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+
+  if (room.voteInterval) {
+    clearInterval(room.voteInterval);
+    room.voteInterval = null;
+  }
+
+  const result = room.tallyVotes();
+
+  broadcast(roomCode, {
+    type: 'VOTE_RESULT',
+    payload: result
+  });
+
+  // Brief pause to show result, then continue
+  setTimeout(() => {
+    if (room.hasChallengedAnswers()) {
+      runVoting(roomCode);
+    } else {
+      runScoring(roomCode);
+    }
+  }, 2000);
 }
 
 function runScoring(roomCode) {
@@ -442,12 +589,41 @@ wss.on('connection', (ws, req) => {
         const room = rooms.get(roomCode);
         if (!room) return;
 
-        room.submitAnswer(playerId, payload.answer);
+        // Validate entries if provided as array
+        let validAnswer = payload.answer;
+        let invalidEntries = [];
 
-        // Confirm to player
+        if (payload.entries && Array.isArray(payload.entries)) {
+          const validEntries = [];
+
+          for (const entry of payload.entries) {
+            const validation = isValidWord(entry);
+            if (validation.valid) {
+              validEntries.push(entry);
+            } else {
+              invalidEntries.push({ entry, reason: validation.reason });
+            }
+          }
+
+          validAnswer = validEntries.join(', ');
+        } else if (payload.answer) {
+          // Validate single answer
+          const validation = isValidWord(payload.answer);
+          if (!validation.valid) {
+            invalidEntries.push({ entry: payload.answer, reason: validation.reason });
+            validAnswer = '';
+          }
+        }
+
+        room.submitAnswer(playerId, validAnswer);
+
+        // Confirm to player with validation feedback
         sendTo(ws, {
           type: 'ANSWER_RECEIVED',
-          payload: { answer: payload.answer }
+          payload: {
+            answer: validAnswer,
+            invalidEntries: invalidEntries.length > 0 ? invalidEntries : undefined
+          }
         });
 
         // Let TV know a player submitted (without revealing answer)
@@ -468,6 +644,73 @@ wss.on('connection', (ws, req) => {
           type: 'GAME_RESET',
           payload: room.getState()
         });
+        break;
+      }
+
+      case 'CHALLENGE_ANSWER': {
+        // Host (via TV) challenges an answer for voting
+        const room = rooms.get(roomCode);
+        if (!room || !isTV) return;
+
+        const result = room.challengeAnswer(payload.answerIndex);
+
+        if (result.success) {
+          broadcast(roomCode, {
+            type: 'ANSWER_CHALLENGED',
+            payload: {
+              answerIndex: payload.answerIndex,
+              challenged: result.challenged
+            }
+          });
+        }
+        break;
+      }
+
+      case 'END_AUDIT': {
+        // Host (via TV) ends audit phase early
+        const room = rooms.get(roomCode);
+        if (!room || !isTV) return;
+
+        if (room.phase === PHASES.AUDIT) {
+          endAuditPhase(roomCode);
+        }
+        break;
+      }
+
+      case 'SUBMIT_VOTE': {
+        // Player submits vote on challenged answer
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        const result = room.submitVote(playerId, payload.vote);
+
+        if (result.success) {
+          // Notify everyone that a vote was received (not the actual vote)
+          broadcast(roomCode, {
+            type: 'VOTE_RECEIVED',
+            payload: {
+              playerId,
+              voteCount: room.votes.size,
+              eligibleVoters: room.players.size - 1 // Exclude answer owner
+            }
+          });
+
+          // Check if all votes are in
+          const eligibleVoters = room.players.size - 1;
+          if (room.votes.size >= eligibleVoters) {
+            // All votes in, end voting round early
+            if (room.voteInterval) {
+              clearInterval(room.voteInterval);
+              room.voteInterval = null;
+            }
+            endVotingRound(roomCode);
+          }
+        } else {
+          sendTo(ws, {
+            type: 'ERROR',
+            payload: { message: result.error }
+          });
+        }
         break;
       }
     }

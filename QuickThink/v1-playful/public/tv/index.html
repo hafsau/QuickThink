@@ -125,6 +125,52 @@
       </div>
     </div>
 
+    <!-- Audit Screen (Host challenges answers) -->
+    <div id="audit-screen" class="screen">
+      <div class="audit-header">
+        <div class="audit-title">HOST REVIEW</div>
+        <div class="audit-category" id="audit-category"></div>
+        <div class="audit-timer" id="audit-timer">15</div>
+      </div>
+      <div class="audit-instructions">
+        <p>Click answers to challenge them for a vote</p>
+      </div>
+      <div class="audit-answers" id="audit-answers">
+        <!-- Answers will appear here for host to review -->
+      </div>
+      <div class="audit-footer">
+        <button id="end-audit-btn" class="end-audit-btn">Done Reviewing</button>
+      </div>
+    </div>
+
+    <!-- Voting Screen (Players vote on challenged answer) -->
+    <div id="voting-screen" class="screen">
+      <div class="voting-header">
+        <div class="voting-title">VOTE!</div>
+        <div class="voting-timer" id="voting-timer">10</div>
+      </div>
+      <div class="voting-content">
+        <div class="voting-question">Does this answer match the category?</div>
+        <div class="voting-category" id="voting-category"></div>
+        <div class="voting-answer-card">
+          <div class="voting-player" id="voting-player"></div>
+          <div class="voting-answer" id="voting-answer"></div>
+        </div>
+        <div class="vote-progress">
+          <span id="vote-count">0</span> / <span id="vote-total">0</span> votes
+        </div>
+      </div>
+    </div>
+
+    <!-- Vote Result Screen (Brief display of vote result) -->
+    <div id="vote-result-screen" class="screen">
+      <div class="vote-result-content">
+        <div class="vote-result-answer" id="result-answer"></div>
+        <div class="vote-result-verdict" id="result-verdict"></div>
+        <div class="vote-result-tally" id="result-tally"></div>
+      </div>
+    </div>
+
     <!-- Scoring Screen -->
     <div id="scoring-screen" class="screen">
       <h2 class="scoring-title">ROUND RESULTS</h2>

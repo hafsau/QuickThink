@@ -1,6 +1,8 @@
 // Quick Think - Scoring and Duplicate Detection
 // Enhanced with Union-Find grouping, lenient fuzzy matching, and volume bonuses
 
+const lemmatizer = require('wink-lemmatizer');
+
 /**
  * Union-Find (Disjoint Set Union) data structure for grouping similar answers
  * Handles transitive matching: if A~B and B~C, then A, B, C are all grouped together
@@ -49,6 +51,117 @@ class UnionFind {
 }
 
 /**
+ * Get the lemma (base form) of a word using linguistic rules
+ * Handles irregular verbs (see/saw/seen), plurals (cats/cat), etc.
+ * @param {string} word - Word to lemmatize
+ * @returns {string} - Base form of the word
+ */
+function getLemma(word) {
+  if (!word) return '';
+  const lower = word.toLowerCase().trim();
+
+  // Try verb lemmatization first (handles see/saw/seen, go/went/gone, etc.)
+  const verbLemma = lemmatizer.verb(lower);
+  if (verbLemma !== lower) return verbLemma;
+
+  // Try noun lemmatization (handles cats/cat, children/child, etc.)
+  const nounLemma = lemmatizer.noun(lower);
+  if (nounLemma !== lower) return nounLemma;
+
+  // Try adjective lemmatization (handles bigger/big, fastest/fast, etc.)
+  const adjLemma = lemmatizer.adjective(lower);
+  if (adjLemma !== lower) return adjLemma;
+
+  return lower;
+}
+
+/**
+ * Get a simplified stem of a word by removing common suffixes
+ * Helps detect sneaky duplicates like "spoon" vs "spoons"
+ * @param {string} word - Word to stem
+ * @returns {string} - Stemmed word
+ */
+function getWordStem(word) {
+  if (!word) return '';
+  let stem = word.toLowerCase().trim();
+
+  // Remove common suffixes (order matters - longer first)
+  // Note: Only remove suffixes that are clearly grammatical, not 'y' which is often part of words
+  const suffixes = [
+    'ization', 'isation', 'fulness', 'ousness', 'iveness',
+    'ically', 'lessly', 'edness',
+    'ation', 'ition', 'ening', 'ingly', 'ously', 'fully',
+    'able', 'ible', 'ness', 'ment', 'less', 'ings', 'tion',
+    'ally', 'edly', 'erly', 'ward',
+    'ing', 'est', 'ies', 'ied', 'ful', 'ous', 'ive', 'ess',
+    'ers', 'ery', 'ens', 'ant', 'ent', 'ism', 'ist',
+    'ity', 'ify', 'ise', 'ize', 'ure', 'ory',
+    'ed', 'er', 'es', 'en', 'ly', 'al',
+    's'  // Just the simple plural 's', not 'y' or 'd' which are often part of words
+  ];
+
+  for (const suffix of suffixes) {
+    if (stem.length > suffix.length + 2 && stem.endsWith(suffix)) {
+      stem = stem.slice(0, -suffix.length);
+      break; // Only remove one suffix
+    }
+  }
+
+  return stem;
+}
+
+/**
+ * Check if two words have the same stem (are morphological variants)
+ * Uses lemmatization for accurate detection of:
+ * - Irregular verbs: see/saw/seen, go/went/gone, eat/ate/eaten
+ * - Plurals: cat/cats, child/children, mouse/mice
+ * - Adjectives: big/bigger/biggest, fast/faster/fastest
+ * @param {string} a - First word
+ * @param {string} b - Second word
+ * @returns {boolean} - True if same stem
+ */
+function hasSameStem(a, b) {
+  if (!a || !b) return false;
+
+  // Use lemmatization to get base forms - handles irregular verbs/plurals
+  const lemmaA = getLemma(a);
+  const lemmaB = getLemma(b);
+
+  // If lemmas match, they're the same word
+  if (lemmaA === lemmaB) return true;
+
+  // Also try suffix-based stemming as fallback
+  const stemA = getWordStem(a);
+  const stemB = getWordStem(b);
+
+  if (stemA === stemB) return true;
+
+  // Also check if one stem starts with the other (with minimum length)
+  const shorter = stemA.length < stemB.length ? stemA : stemB;
+  const longer = stemA.length < stemB.length ? stemB : stemA;
+
+  // Direct prefix check (for words like "fast" vs "faster")
+  if (shorter.length >= 3 && longer.startsWith(shorter)) {
+    return true;
+  }
+
+  // Handle doubled consonants from -ing (run->running, swim->swimming)
+  // If longer ends with a doubled consonant, try removing one
+  if (longer.length >= 4 && longer.length === shorter.length + 1) {
+    const lastChar = longer[longer.length - 1];
+    const secondLastChar = longer[longer.length - 2];
+    if (lastChar === secondLastChar && /[bcdfghjklmnpqrstvwxz]/.test(lastChar)) {
+      const withoutDouble = longer.slice(0, -1);
+      if (withoutDouble === shorter) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Calculate Levenshtein distance between two strings
  * @param {string} a - First string
  * @param {string} b - Second string
@@ -88,6 +201,10 @@ function levenshteinDistance(a, b) {
 
 /**
  * Check if two strings are similar (fuzzy match)
+ * Uses both Levenshtein distance and stemming:
+ * - Levenshtein catches typos: "spain" vs "spian"
+ * - Stemming catches morphological variants: "spoon" vs "spoons", "walk" vs "walked"
+ *
  * Lenient thresholds to catch most typos:
  * - 3-4 chars: allow 1 typo
  * - 5-7 chars: allow 2 typos
@@ -100,6 +217,9 @@ function levenshteinDistance(a, b) {
 function isSimilar(a, b) {
   if (a === b) return true;
   if (!a || !b) return false;
+
+  // Check stem similarity first (catches plurals, tense variations)
+  if (hasSameStem(a, b)) return true;
 
   const maxLength = Math.max(a.length, b.length);
   const minLength = Math.min(a.length, b.length);
@@ -437,5 +557,8 @@ module.exports = {
   normalizeAnswer,
   isSimilar,
   levenshteinDistance,
+  getWordStem,
+  hasSameStem,
+  getLemma,
   UnionFind
 };

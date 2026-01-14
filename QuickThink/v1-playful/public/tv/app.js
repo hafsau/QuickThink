@@ -96,6 +96,9 @@ class QuickThinkTV {
       countdown: document.getElementById('countdown-screen'),
       typing: document.getElementById('typing-screen'),
       reveal: document.getElementById('reveal-screen'),
+      audit: document.getElementById('audit-screen'),
+      voting: document.getElementById('voting-screen'),
+      voteResult: document.getElementById('vote-result-screen'),
       scoring: document.getElementById('scoring-screen'),
       gameover: document.getElementById('gameover-screen')
     };
@@ -126,6 +129,25 @@ class QuickThinkTV {
 
       scoreboard: document.getElementById('scoreboard'),
 
+      // Audit elements
+      auditCategory: document.getElementById('audit-category'),
+      auditTimer: document.getElementById('audit-timer'),
+      auditAnswers: document.getElementById('audit-answers'),
+      endAuditBtn: document.getElementById('end-audit-btn'),
+
+      // Voting elements
+      votingCategory: document.getElementById('voting-category'),
+      votingTimer: document.getElementById('voting-timer'),
+      votingPlayer: document.getElementById('voting-player'),
+      votingAnswer: document.getElementById('voting-answer'),
+      voteCount: document.getElementById('vote-count'),
+      voteTotal: document.getElementById('vote-total'),
+
+      // Vote result elements
+      resultAnswer: document.getElementById('result-answer'),
+      resultVerdict: document.getElementById('result-verdict'),
+      resultTally: document.getElementById('result-tally'),
+
       winnerName: document.getElementById('winner-name'),
       finalScores: document.getElementById('final-scores'),
       playAgainBtn: document.getElementById('play-again-btn'),
@@ -146,6 +168,7 @@ class QuickThinkTV {
     });
 
     this.elements.playAgainBtn.addEventListener('click', () => this.playAgain());
+    this.elements.endAuditBtn.addEventListener('click', () => this.endAudit());
 
     this.elements.lengthBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -276,6 +299,18 @@ class QuickThinkTV {
         this.resetGame(payload);
         break;
 
+      case 'ANSWER_CHALLENGED':
+        this.updateChallengedAnswer(payload);
+        break;
+
+      case 'VOTE_RECEIVED':
+        this.updateVoteCount(payload);
+        break;
+
+      case 'VOTE_RESULT':
+        this.showVoteResult(payload);
+        break;
+
       case 'ERROR':
         console.error('Server error:', payload.message);
         break;
@@ -389,6 +424,14 @@ class QuickThinkTV {
         this.showReveal(payload);
         break;
 
+      case 'AUDIT':
+        this.showAudit(payload);
+        break;
+
+      case 'VOTING':
+        this.showVoting(payload);
+        break;
+
       case 'SCORING':
         this.showScoring(payload);
         break;
@@ -495,6 +538,21 @@ class QuickThinkTV {
         this.elements.typingTimer.classList.add('urgent');
       } else {
         this.elements.typingTimer.classList.remove('urgent');
+      }
+    }
+
+    // Update audit screen timer
+    if (this.screens.audit.classList.contains('active')) {
+      this.elements.auditTimer.textContent = remaining;
+    }
+
+    // Update voting screen timer
+    if (this.screens.voting.classList.contains('active')) {
+      this.elements.votingTimer.textContent = remaining;
+      if (remaining <= 3) {
+        this.elements.votingTimer.classList.add('urgent');
+      } else {
+        this.elements.votingTimer.classList.remove('urgent');
       }
     }
   }
@@ -638,6 +696,100 @@ class QuickThinkTV {
     });
 
     this.showScreen('scoring');
+  }
+
+  showAudit(payload) {
+    this.elements.auditCategory.textContent = payload.category;
+    this.elements.auditTimer.textContent = payload.timer;
+    this.elements.auditAnswers.innerHTML = '';
+
+    // Store answers for challenge tracking
+    this.auditAnswers = payload.answers;
+
+    // Create clickable answer cards
+    payload.answers.forEach((answer, index) => {
+      const card = document.createElement('div');
+      card.className = `audit-answer-card ${answer.unique ? 'unique' : 'duplicate'}`;
+      card.dataset.index = answer.index;
+
+      card.innerHTML = `
+        <div class="audit-answer-player">${answer.playerName}</div>
+        <div class="audit-answer-text">${answer.answer || '(no answer)'}</div>
+        <div class="audit-answer-status">${answer.unique ? 'Unique' : 'Duplicate'}</div>
+        <div class="challenge-badge">CHALLENGED</div>
+      `;
+
+      card.addEventListener('click', () => this.challengeAnswer(answer.index));
+      this.elements.auditAnswers.appendChild(card);
+    });
+
+    this.showScreen('audit');
+  }
+
+  challengeAnswer(answerIndex) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'CHALLENGE_ANSWER',
+        payload: { answerIndex }
+      }));
+    }
+  }
+
+  updateChallengedAnswer(payload) {
+    // Update visual state of all answer cards
+    const cards = this.elements.auditAnswers.querySelectorAll('.audit-answer-card');
+    cards.forEach(card => {
+      const index = parseInt(card.dataset.index);
+      if (payload.challenged.includes(index)) {
+        card.classList.add('challenged');
+      } else {
+        card.classList.remove('challenged');
+      }
+    });
+  }
+
+  endAudit() {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'END_AUDIT',
+        payload: {}
+      }));
+    }
+  }
+
+  showVoting(payload) {
+    this.elements.votingCategory.textContent = payload.category;
+    this.elements.votingTimer.textContent = payload.timer;
+    this.elements.votingPlayer.textContent = payload.challenge.playerName;
+    this.elements.votingAnswer.textContent = payload.challenge.answer;
+    this.elements.voteCount.textContent = '0';
+    this.elements.voteTotal.textContent = this.players.length - 1;
+
+    this.showScreen('voting');
+  }
+
+  updateVoteCount(payload) {
+    this.elements.voteCount.textContent = payload.voteCount;
+    this.elements.voteTotal.textContent = payload.eligibleVoters;
+  }
+
+  showVoteResult(payload) {
+    this.elements.resultAnswer.textContent = payload.answer.answer;
+
+    if (payload.rejected) {
+      this.elements.resultVerdict.textContent = 'REJECTED';
+      this.elements.resultVerdict.className = 'vote-result-verdict rejected';
+      audioManager.playFail();
+    } else {
+      this.elements.resultVerdict.textContent = 'ACCEPTED';
+      this.elements.resultVerdict.className = 'vote-result-verdict accepted';
+      audioManager.playSuccess();
+    }
+
+    this.elements.resultTally.textContent =
+      `Valid: ${payload.validVotes} | Invalid: ${payload.invalidVotes}`;
+
+    this.showScreen('voteResult');
   }
 
   showGameOver(payload) {

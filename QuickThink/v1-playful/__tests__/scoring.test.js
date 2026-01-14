@@ -3,6 +3,8 @@ const {
   normalizeAnswer,
   isSimilar,
   levenshteinDistance,
+  getWordStem,
+  hasSameStem,
   parseMultipleEntries,
   dedupePlayerEntries,
   findDuplicates,
@@ -75,6 +77,72 @@ describe('levenshteinDistance', () => {
   });
 });
 
+describe('getWordStem', () => {
+  test('handles empty input', () => {
+    expect(getWordStem('')).toBe('');
+    expect(getWordStem(null)).toBe('');
+  });
+
+  test('removes plural -s suffix', () => {
+    expect(getWordStem('spoons')).toBe('spoon');
+    expect(getWordStem('cats')).toBe('cat');
+  });
+
+  test('removes -ed past tense suffix', () => {
+    expect(getWordStem('walked')).toBe('walk');
+    expect(getWordStem('played')).toBe('play');
+  });
+
+  test('removes -ing suffix', () => {
+    expect(getWordStem('walking')).toBe('walk');
+    expect(getWordStem('running')).toBe('runn');
+  });
+
+  test('removes -er suffix', () => {
+    expect(getWordStem('faster')).toBe('fast');
+    expect(getWordStem('bigger')).toBe('bigg');
+  });
+
+  test('removes -es plural suffix', () => {
+    expect(getWordStem('boxes')).toBe('box');
+    expect(getWordStem('dishes')).toBe('dish');
+  });
+
+  test('preserves short words', () => {
+    // Should not strip words that would become too short
+    expect(getWordStem('cat')).toBe('cat');
+    expect(getWordStem('is')).toBe('is');
+  });
+});
+
+describe('hasSameStem', () => {
+  test('returns true for singular/plural pairs', () => {
+    expect(hasSameStem('spoon', 'spoons')).toBe(true);
+    expect(hasSameStem('cat', 'cats')).toBe(true);
+    expect(hasSameStem('box', 'boxes')).toBe(true);
+  });
+
+  test('returns true for present/past tense pairs', () => {
+    expect(hasSameStem('walk', 'walked')).toBe(true);
+    expect(hasSameStem('play', 'played')).toBe(true);
+  });
+
+  test('returns true for base/present participle pairs', () => {
+    expect(hasSameStem('walk', 'walking')).toBe(true);
+    expect(hasSameStem('run', 'running')).toBe(true);
+  });
+
+  test('returns false for different words', () => {
+    expect(hasSameStem('cat', 'dog')).toBe(false);
+    expect(hasSameStem('pizza', 'pasta')).toBe(false);
+  });
+
+  test('handles empty input', () => {
+    expect(hasSameStem('', 'test')).toBe(false);
+    expect(hasSameStem('test', '')).toBe(false);
+  });
+});
+
 describe('normalizeAnswer', () => {
   test('converts to lowercase', () => {
     expect(normalizeAnswer('HELLO')).toBe('hello');
@@ -139,6 +207,22 @@ describe('isSimilar', () => {
 
   test('returns false when length difference is too large', () => {
     expect(isSimilar('hi', 'helicopter')).toBe(false);
+  });
+
+  test('catches plural variations via stemming', () => {
+    expect(isSimilar('spoon', 'spoons')).toBe(true);
+    expect(isSimilar('cat', 'cats')).toBe(true);
+    expect(isSimilar('box', 'boxes')).toBe(true);
+  });
+
+  test('catches past tense variations via stemming', () => {
+    expect(isSimilar('walk', 'walked')).toBe(true);
+    expect(isSimilar('play', 'played')).toBe(true);
+  });
+
+  test('catches present participle variations via stemming', () => {
+    expect(isSimilar('walk', 'walking')).toBe(true);
+    expect(isSimilar('run', 'running')).toBe(true);
   });
 });
 
@@ -246,6 +330,25 @@ describe('findDuplicates', () => {
     ];
     const result = findDuplicates(answers);
     expect(result.length).toBe(1);
+  });
+
+  test('marks plural variations as duplicates across players', () => {
+    const answers = [
+      { playerId: 'p1', playerName: 'Alice', answer: 'spoon' },
+      { playerId: 'p2', playerName: 'Bob', answer: 'spoons' },
+    ];
+    const result = findDuplicates(answers);
+    // Both should be marked as duplicates (not unique)
+    expect(result.every(r => r.unique === false)).toBe(true);
+  });
+
+  test('marks tense variations as duplicates across players', () => {
+    const answers = [
+      { playerId: 'p1', playerName: 'Alice', answer: 'walk' },
+      { playerId: 'p2', playerName: 'Bob', answer: 'walked' },
+    ];
+    const result = findDuplicates(answers);
+    expect(result.every(r => r.unique === false)).toBe(true);
   });
 });
 

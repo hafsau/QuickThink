@@ -11,6 +11,8 @@ const PHASES = {
   TYPING: 'TYPING',
   LOCKED: 'LOCKED',
   REVEAL: 'REVEAL',
+  AUDIT: 'AUDIT',        // Host can challenge answers
+  VOTING: 'VOTING',      // Players vote on challenged answer
   SCORING: 'SCORING',
   GAME_OVER: 'GAME_OVER'
 };
@@ -28,6 +30,8 @@ const TIMING = {
   COUNTDOWN: 3000,
   TYPING: 10000,
   REVEAL_PER_ANSWER: 1500,
+  AUDIT: 15000,      // Time for host to review answers
+  VOTING: 10000,     // Time for players to vote
   SCORING: 3000
 };
 
@@ -48,6 +52,12 @@ class GameState {
     this.answers = new Map(); // playerId -> answer
     this.markedAnswers = []; // After duplicate detection
     this.revealIndex = 0;
+
+    // Audit state
+    this.challengedAnswers = []; // Indices of answers challenged by host
+    this.currentChallenge = null; // Current answer being voted on { index, answer }
+    this.votes = new Map(); // playerId -> vote ('valid' or 'invalid')
+    this.rejectedAnswers = new Set(); // Indices of answers rejected by vote
 
     // Scores
     this.scores = {}; // playerId -> total score
@@ -190,19 +200,144 @@ class GameState {
     return null;
   }
 
-  // Calculate and apply scores
+  // Start audit phase (host reviews answers)
+  startAudit() {
+    this.phase = PHASES.AUDIT;
+    this.challengedAnswers = [];
+    this.rejectedAnswers = new Set();
+    this.timerValue = Math.floor(TIMING.AUDIT / 1000);
+  }
+
+  // Host challenges an answer (marks it for voting)
+  challengeAnswer(answerIndex) {
+    if (this.phase !== PHASES.AUDIT) {
+      return { success: false, error: 'Not in audit phase' };
+    }
+
+    if (answerIndex < 0 || answerIndex >= this.markedAnswers.length) {
+      return { success: false, error: 'Invalid answer index' };
+    }
+
+    // Toggle challenge status
+    const idx = this.challengedAnswers.indexOf(answerIndex);
+    if (idx >= 0) {
+      this.challengedAnswers.splice(idx, 1);
+    } else {
+      this.challengedAnswers.push(answerIndex);
+    }
+
+    return { success: true, challenged: this.challengedAnswers };
+  }
+
+  // Get all answers for audit display
+  getAuditAnswers() {
+    return this.markedAnswers.map((answer, index) => ({
+      ...answer,
+      index,
+      challenged: this.challengedAnswers.includes(index)
+    }));
+  }
+
+  // Check if there are challenged answers to vote on
+  hasChallengedAnswers() {
+    return this.challengedAnswers.length > 0;
+  }
+
+  // Start voting on the next challenged answer
+  startNextVote() {
+    if (this.challengedAnswers.length === 0) {
+      return null;
+    }
+
+    const nextIndex = this.challengedAnswers.shift();
+    this.currentChallenge = {
+      index: nextIndex,
+      answer: this.markedAnswers[nextIndex]
+    };
+    this.votes.clear();
+    this.phase = PHASES.VOTING;
+    this.timerValue = Math.floor(TIMING.VOTING / 1000);
+
+    return this.currentChallenge;
+  }
+
+  // Submit a vote for the current challenge
+  submitVote(playerId, vote) {
+    if (this.phase !== PHASES.VOTING) {
+      return { success: false, error: 'Not in voting phase' };
+    }
+
+    if (!this.currentChallenge) {
+      return { success: false, error: 'No active challenge' };
+    }
+
+    // Don't let the answer's owner vote on their own answer
+    if (this.currentChallenge.answer.playerId === playerId) {
+      return { success: false, error: 'Cannot vote on your own answer' };
+    }
+
+    this.votes.set(playerId, vote);
+    return { success: true };
+  }
+
+  // Tally votes and determine if answer is rejected
+  tallyVotes() {
+    if (!this.currentChallenge) return null;
+
+    let validVotes = 0;
+    let invalidVotes = 0;
+
+    this.votes.forEach(vote => {
+      if (vote === 'valid') validVotes++;
+      else if (vote === 'invalid') invalidVotes++;
+    });
+
+    // Majority wins, tie goes to keeping the answer valid
+    const rejected = invalidVotes > validVotes;
+
+    if (rejected) {
+      this.rejectedAnswers.add(this.currentChallenge.index);
+    }
+
+    const result = {
+      answer: this.currentChallenge.answer,
+      index: this.currentChallenge.index,
+      validVotes,
+      invalidVotes,
+      rejected
+    };
+
+    this.currentChallenge = null;
+    return result;
+  }
+
+  // Calculate and apply scores (excluding rejected answers)
   calculateScores() {
     this.phase = PHASES.SCORING;
 
-    const roundPoints = calculateRoundPoints(this.markedAnswers);
+    // Filter out rejected answers before scoring
+    const validAnswers = this.markedAnswers.filter((_, index) =>
+      !this.rejectedAnswers.has(index)
+    );
+
+    const roundPoints = calculateRoundPoints(validAnswers);
     this.scores = updateScores(this.scores, roundPoints);
 
     return roundPoints;
   }
 
+  // Get rejected answers for display
+  getRejectedAnswers() {
+    return Array.from(this.rejectedAnswers).map(index => this.markedAnswers[index]);
+  }
+
   // Get detailed results for display (breakdown of unique, duplicates, bonus)
   getDetailedResults() {
-    return getDetailedResults(this.markedAnswers);
+    // Filter out rejected answers
+    const validAnswers = this.markedAnswers.filter((_, index) =>
+      !this.rejectedAnswers.has(index)
+    );
+    return getDetailedResults(validAnswers);
   }
 
   // Check if game is over
@@ -228,6 +363,12 @@ class GameState {
     this.answers.clear();
     this.markedAnswers = [];
     this.revealIndex = 0;
+
+    // Reset audit state
+    this.challengedAnswers = [];
+    this.currentChallenge = null;
+    this.votes.clear();
+    this.rejectedAnswers = new Set();
 
     // Reset scores
     this.players.forEach((player, id) => {

@@ -1,5 +1,35 @@
 // Quick Think - v1-playful Controller Application
-// Enhanced with multi-entry support
+// Enhanced with multi-entry support and encouragement messages
+
+// Encouragement messages shown when adding entries
+const ENCOURAGEMENT_MESSAGES = [
+  "That's a good one!",
+  "Keep going!",
+  "Wow, you're on a roll!",
+  "Way to go!",
+  "Nice thinking!",
+  "Great choice!",
+  "You're crushing it!",
+  "Smart answer!",
+  "Keep 'em coming!",
+  "On fire!",
+  "Brilliant!",
+  "That's unique!",
+  "Good pick!",
+  "Excellent!",
+  "You got this!"
+];
+
+// Milestone messages for hitting certain counts
+const MILESTONE_MESSAGES = {
+  3: "Hat trick! 🎩",
+  5: "High five! ✋",
+  7: "Lucky seven!",
+  10: "Double digits! 🔥"
+};
+
+// Client-side duplicate detection uses shared wordUtils.js
+// Server-side uses full lemmatization (wink-lemmatizer) for accurate detection
 
 class QuickThinkController {
   constructor() {
@@ -23,13 +53,18 @@ class QuickThinkController {
     this.bindEvents();
 
     if (this.roomCode) {
-      // Show connecting state initially
+      // Room code from URL - hide room code input
+      this.elements.roomCodeInput.style.display = 'none';
       this.elements.joinBtn.textContent = 'CONNECTING...';
       this.elements.joinBtn.disabled = true;
       this.connectWebSocket();
     } else {
-      this.elements.joinBtn.textContent = 'NO ROOM CODE';
+      // No room code - show input for manual entry
+      this.elements.roomCodeInput.style.display = 'block';
+      this.elements.joinBtn.textContent = 'JOIN GAME';
       this.elements.joinBtn.disabled = true;
+      // Still connect WebSocket so we're ready when they enter code
+      this.connectWebSocket();
     }
   }
 
@@ -42,6 +77,11 @@ class QuickThinkController {
     }
   }
 
+  isValidRoomCode(code) {
+    if (!code || typeof code !== 'string') return false;
+    return /^[A-Z0-9]{4}$/.test(code.toUpperCase());
+  }
+
   bindElements() {
     this.screens = {
       join: document.getElementById('join-screen'),
@@ -50,12 +90,15 @@ class QuickThinkController {
       typing: document.getElementById('typing-screen'),
       locked: document.getElementById('locked-screen'),
       reveal: document.getElementById('reveal-screen'),
+      audit: document.getElementById('audit-screen'),
+      voting: document.getElementById('voting-screen'),
       score: document.getElementById('score-screen'),
       gameover: document.getElementById('gameover-screen'),
       error: document.getElementById('error-screen')
     };
 
     this.elements = {
+      roomCodeInput: document.getElementById('room-code-input'),
       playerNameInput: document.getElementById('player-name'),
       joinBtn: document.getElementById('join-btn'),
 
@@ -78,11 +121,36 @@ class QuickThinkController {
       roundResult: document.getElementById('round-result'),
 
       resultMessage: document.getElementById('result-message'),
-      finalScore: document.getElementById('final-score')
+      finalScore: document.getElementById('final-score'),
+
+      // Voting elements
+      votingTimer: document.getElementById('voting-timer'),
+      voteCategory: document.getElementById('vote-category'),
+      votePlayerName: document.getElementById('vote-player-name'),
+      voteAnswerText: document.getElementById('vote-answer-text'),
+      voteValidBtn: document.getElementById('vote-valid-btn'),
+      voteInvalidBtn: document.getElementById('vote-invalid-btn'),
+      voteSubmittedMsg: document.getElementById('vote-submitted-msg'),
+      ownAnswerMsg: document.getElementById('own-answer-msg')
     };
   }
 
   bindEvents() {
+    // Room code input - update display and button
+    this.elements.roomCodeInput.addEventListener('input', () => {
+      const code = this.elements.roomCodeInput.value.toUpperCase();
+      this.elements.roomCodeInput.value = code;
+      document.getElementById('room-code').textContent = code || '----';
+      this.updateJoinButton();
+    });
+
+    this.elements.roomCodeInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.elements.playerNameInput.focus();
+      }
+    });
+
     // Join form - update button on every input change
     this.elements.playerNameInput.addEventListener('input', () => {
       this.updateJoinButton();
@@ -110,6 +178,10 @@ class QuickThinkController {
         this.addEntry();
       }
     });
+
+    // Vote buttons
+    this.elements.voteValidBtn.addEventListener('click', () => this.submitVote('valid'));
+    this.elements.voteInvalidBtn.addEventListener('click', () => this.submitVote('invalid'));
   }
 
   // Simple check if WebSocket is ready
@@ -120,7 +192,8 @@ class QuickThinkController {
   // Check if player can join
   canJoin() {
     const name = this.elements.playerNameInput.value.trim();
-    return name.length >= 1 && this.isWebSocketReady();
+    const roomCode = this.roomCode || this.elements.roomCodeInput.value.trim();
+    return name.length >= 1 && this.isValidRoomCode(roomCode) && this.isWebSocketReady();
   }
 
   connectWebSocket() {
@@ -224,6 +297,11 @@ class QuickThinkController {
       console.log('[Controller] Cannot join - conditions not met');
       this.updateJoinButton();
       return;
+    }
+
+    // Use room code from URL or manual input
+    if (!this.roomCode) {
+      this.roomCode = this.elements.roomCodeInput.value.trim().toUpperCase();
     }
 
     this.playerName = this.elements.playerNameInput.value.trim();
@@ -348,6 +426,14 @@ class QuickThinkController {
         this.showScreen('reveal');
         break;
 
+      case 'AUDIT':
+        this.showScreen('audit');
+        break;
+
+      case 'VOTING':
+        this.showVoting(payload);
+        break;
+
       case 'SCORING':
         this.showScoring(payload);
         break;
@@ -376,10 +462,21 @@ class QuickThinkController {
         this.elements.timerDisplay.classList.add('low');
       }
     }
+
+    // Update voting screen timer
+    if (this.screens.voting.classList.contains('active')) {
+      this.elements.votingTimer.textContent = remaining;
+
+      if (remaining <= 3) {
+        this.elements.votingTimer.classList.add('low');
+      } else {
+        this.elements.votingTimer.classList.remove('low');
+      }
+    }
   }
 
   // Entry management methods
-  addEntry() {
+  async addEntry() {
     const value = this.elements.answerInput.value.trim();
     if (!value) return;
 
@@ -392,13 +489,79 @@ class QuickThinkController {
       return;
     }
 
+    // Check for sneaky duplicates (plurals, past tense, etc.)
+    const similarEntry = findSimilarEntry(value, this.entries);
+    if (similarEntry) {
+      this.showInputError(`"${similarEntry}" already used!`);
+      return;
+    }
+
+    // Validate the word with server
+    try {
+      const response = await fetch(`/api/validate-word?word=${encodeURIComponent(value)}`);
+      const result = await response.json();
+
+      if (!result.valid) {
+        this.showInputError(result.reason || 'Not a valid word');
+        return;
+      }
+    } catch (err) {
+      // If validation fails, allow the word (server will validate on submit)
+      console.warn('Word validation failed:', err);
+    }
+
     this.entries.push(value);
     this.renderEntries();
     this.elements.answerInput.value = '';
     this.elements.answerInput.focus();
 
+    // Show encouragement message
+    this.showEncouragement();
+
     // Send updated list to server
     this.sendEntries();
+  }
+
+  showEncouragement() {
+    const count = this.entries.length;
+
+    // Check for milestone message first
+    let message;
+    if (MILESTONE_MESSAGES[count]) {
+      message = MILESTONE_MESSAGES[count];
+    } else {
+      // Random encouragement
+      message = ENCOURAGEMENT_MESSAGES[Math.floor(Math.random() * ENCOURAGEMENT_MESSAGES.length)];
+    }
+
+    // Show the message
+    const msgEl = document.getElementById('encouragement-msg');
+    if (msgEl) {
+      msgEl.textContent = message;
+      msgEl.classList.add('show');
+
+      // Hide after a short delay
+      setTimeout(() => {
+        msgEl.classList.remove('show');
+      }, 1500);
+    }
+  }
+
+  showInputError(message) {
+    const input = this.elements.answerInput;
+    input.classList.add('error');
+    input.placeholder = message;
+
+    // Shake animation
+    input.style.animation = 'shake 0.3s ease-in-out';
+
+    setTimeout(() => {
+      input.classList.remove('error');
+      input.placeholder = 'Type an answer, press Enter';
+      input.style.animation = '';
+      input.value = '';
+      input.focus();
+    }, 1500);
   }
 
   removeEntry(index) {
@@ -510,6 +673,55 @@ class QuickThinkController {
     this.myScore = 0;
     this.clearEntries();
     this.showScreen('waiting');
+  }
+
+  showVoting(payload) {
+    this.currentVoteChallenge = payload.challenge;
+    this.hasVoted = false;
+
+    this.elements.voteCategory.textContent = payload.category;
+    this.elements.votePlayerName.textContent = payload.challenge.playerName;
+    this.elements.voteAnswerText.textContent = payload.challenge.answer;
+    this.elements.votingTimer.textContent = payload.timer;
+    this.elements.votingTimer.classList.remove('low');
+
+    // Reset button states
+    this.elements.voteValidBtn.disabled = false;
+    this.elements.voteInvalidBtn.disabled = false;
+    this.elements.voteSubmittedMsg.style.display = 'none';
+    this.elements.ownAnswerMsg.style.display = 'none';
+
+    // Check if this is the player's own answer
+    if (payload.challenge.playerId === this.playerId) {
+      this.elements.voteValidBtn.disabled = true;
+      this.elements.voteInvalidBtn.disabled = true;
+      this.elements.ownAnswerMsg.style.display = 'block';
+    }
+
+    this.showScreen('voting');
+  }
+
+  submitVote(vote) {
+    if (this.hasVoted) return;
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'SUBMIT_VOTE',
+        payload: { vote }
+      }));
+
+      this.hasVoted = true;
+      this.elements.voteValidBtn.disabled = true;
+      this.elements.voteInvalidBtn.disabled = true;
+      this.elements.voteSubmittedMsg.style.display = 'block';
+
+      // Highlight the selected button
+      if (vote === 'valid') {
+        this.elements.voteValidBtn.classList.add('selected');
+      } else {
+        this.elements.voteInvalidBtn.classList.add('selected');
+      }
+    }
   }
 
   showScreen(screenName) {

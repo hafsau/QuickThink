@@ -20,6 +20,16 @@
         <div class="join-form">
           <input
             type="text"
+            id="room-code-input"
+            placeholder="Room Code"
+            maxlength="4"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="characters"
+            style="display: none;"
+          />
+          <input
+            type="text"
             id="player-name"
             placeholder="Your Name"
             maxlength="12"
@@ -79,6 +89,9 @@
           <div class="entry-hint">Press Enter to add</div>
         </div>
 
+        <!-- Encouragement message -->
+        <div id="encouragement-msg" class="encouragement-msg"></div>
+
         <!-- Entry list container -->
         <div class="entries-list" id="entries-list">
           <!-- Entries will be added here dynamically -->
@@ -123,6 +136,52 @@
       </div>
     </div>
 
+    <!-- Audit Screen (watching host review) -->
+    <div id="audit-screen" class="screen">
+      <div class="audit-content">
+        <div class="gavel-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2l6 6-2 2-6-6 2-2z"></path>
+            <path d="M4 14l6 6-2 2-6-6 2-2z"></path>
+            <line x1="14" y1="10" x2="10" y2="14"></line>
+            <line x1="2" y1="22" x2="22" y2="22"></line>
+          </svg>
+        </div>
+        <h2>Host Review</h2>
+        <p class="watch-tv">Watch the TV for challenged answers...</p>
+      </div>
+    </div>
+
+    <!-- Voting Screen -->
+    <div id="voting-screen" class="screen">
+      <div class="voting-content">
+        <div class="voting-header">
+          <div class="voting-timer" id="voting-timer">10</div>
+          <h2>VOTE!</h2>
+        </div>
+        <div class="voting-question">
+          <p>Does this answer match the category?</p>
+          <div class="voting-category" id="vote-category"></div>
+        </div>
+        <div class="voting-answer-display">
+          <div class="vote-player-name" id="vote-player-name"></div>
+          <div class="vote-answer-text" id="vote-answer-text"></div>
+        </div>
+        <div class="voting-buttons">
+          <button id="vote-valid-btn" class="vote-btn valid">
+            <span class="vote-icon">✓</span>
+            <span>VALID</span>
+          </button>
+          <button id="vote-invalid-btn" class="vote-btn invalid">
+            <span class="vote-icon">✗</span>
+            <span>INVALID</span>
+          </button>
+        </div>
+        <div id="vote-submitted-msg" class="vote-submitted-msg">Vote submitted!</div>
+        <div id="own-answer-msg" class="own-answer-msg">This is your answer - you cannot vote</div>
+      </div>
+    </div>
+
     <!-- Score Screen -->
     <div id="score-screen" class="screen">
       <div class="score-content">
@@ -153,6 +212,8 @@
     </div>
   </div>
 
+  <script src="/shared/wordValidation.js"></script>
+  <script src="/shared/wordUtils.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

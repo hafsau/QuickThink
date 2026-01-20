@@ -51,6 +51,11 @@ function generatePlayerId() {
   return 'p_' + Math.random().toString(36).substr(2, 9);
 }
 
+// Redirect root to TV display
+app.get('/', (req, res) => {
+  res.redirect('/tv');
+});
+
 // Serve static files
 app.use('/tv', express.static(path.join(__dirname, 'public/tv')));
 app.use('/controller', express.static(path.join(__dirname, 'public/controller')));

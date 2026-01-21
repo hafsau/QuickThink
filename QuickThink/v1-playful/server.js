@@ -72,8 +72,10 @@ app.get('/api/create-room', (req, res) => {
   const gameState = new GameState(roomCode);
   rooms.set(roomCode, gameState);
 
-  const localIP = getLocalIP();
-  const joinUrl = `http://${localIP}:${PORT}/controller?room=${roomCode}`;
+  // Use request host for deployed environments
+  const protocol = req.get('x-forwarded-proto') || req.protocol || 'http';
+  const host = req.get('host');
+  const joinUrl = `${protocol}://${host}/controller?room=${roomCode}`;
 
   res.json({
     roomCode,
@@ -84,8 +86,11 @@ app.get('/api/create-room', (req, res) => {
 // API endpoint to generate QR code
 app.get('/api/qr/:roomCode', async (req, res) => {
   const { roomCode } = req.params;
-  const localIP = getLocalIP();
-  const joinUrl = `http://${localIP}:${PORT}/controller?room=${roomCode}`;
+
+  // Use request host for deployed environments, fallback to local IP for development
+  const protocol = req.get('x-forwarded-proto') || req.protocol || 'http';
+  const host = req.get('host');
+  const joinUrl = `${protocol}://${host}/controller?room=${roomCode}`;
 
   try {
     const qrDataUrl = await QRCode.toDataURL(joinUrl, {

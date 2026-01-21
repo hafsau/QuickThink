@@ -109,6 +109,7 @@ body {
 .join-content {
   width: 100%;
   max-width: 340px;
+  text-align: center;
 }
 
 .join-form {
@@ -1039,12 +1040,14 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
 }
 
 .settings-option label {
   font-size: 16px;
   font-weight: 600;
   color: var(--text-light);
+  flex-shrink: 0;
 }
 
 .toggle-btn {
@@ -1067,6 +1070,7 @@ body {
 .timer-options {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .timer-btn {

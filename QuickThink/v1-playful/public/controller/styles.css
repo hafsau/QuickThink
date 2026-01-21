@@ -1043,6 +1043,12 @@ body {
   width: 100%;
 }
 
+.settings-option.stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
 .settings-option label {
   font-size: 16px;
   font-weight: 600;

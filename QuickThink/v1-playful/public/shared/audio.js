@@ -443,9 +443,14 @@ class AudioManager {
   // Stop current music
   stopMusic() {
     if (this.currentMusic) {
+      // Set active flag to false to stop setTimeout loops
+      if (this.currentMusic[0] && typeof this.currentMusic[0].active !== 'undefined') {
+        this.currentMusic[0].active = false;
+      }
+      // Also try to stop any actual oscillator nodes
       this.currentMusic.forEach(node => {
         try {
-          node.stop();
+          if (node.stop) node.stop();
         } catch (e) {}
       });
       this.currentMusic = null;
@@ -457,8 +462,10 @@ class AudioManager {
     if (!this.ctx || this.isMuted) return;
     this.stopMusic();
 
-    this.currentMusic = [{ active: true }]; // Flag to track if music should play
-    const isActive = () => this.currentMusic && this.currentMusic[0]?.active;
+    // Use local flag reference so old loops stop when this specific music is stopped
+    const flag = { active: true };
+    this.currentMusic = [flag];
+    const isActive = () => flag.active;
 
     const bpm = 140;
     const beatTime = 60 / bpm;
@@ -598,159 +605,43 @@ class AudioManager {
     }
   }
 
-  // Play gameplay music - super energetic and fast!
+  // Play gameplay music - energetic without droning
   playGameplayMusic() {
     if (!this.ctx || this.isMuted) return;
     this.stopMusic();
 
-    const nodes = [];
+    // Use local flag reference so old loops stop when this specific music is stopped
+    const flag = { active: true };
+    this.currentMusic = [flag];
+    const isActive = () => flag.active;
 
-    // Create continuous background chord - G major
-    const createChordNote = (freq) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+    const bpm = 160;
+    const beatTime = 60 / bpm;
 
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      gain.gain.value = 0.12;
+    // Energetic melody
+    const melody = [
+      { freq: 784, time: 0, dur: 0.25 },    // G5
+      { freq: 880, time: 0.25, dur: 0.25 }, // A5
+      { freq: 988, time: 0.5, dur: 0.25 },  // B5
+      { freq: 880, time: 0.75, dur: 0.25 }, // A5
+      { freq: 784, time: 1, dur: 0.5 },     // G5
+      { freq: 659, time: 1.5, dur: 0.25 },  // E5
+      { freq: 784, time: 1.75, dur: 0.25 }, // G5
+      { freq: 880, time: 2, dur: 0.5 },     // A5
+      { freq: 784, time: 2.5, dur: 0.25 },  // G5
+      { freq: 659, time: 2.75, dur: 0.25 }, // E5
+      { freq: 587, time: 3, dur: 0.5 },     // D5
+      { freq: 659, time: 3.5, dur: 0.5 },   // E5
+    ];
 
-      osc.connect(gain);
-      gain.connect(this.musicGain);
-      osc.start();
+    const loopDuration = 4 * beatTime * 1000;
 
-      nodes.push(osc);
-    };
+    const playLoop = () => {
+      if (!isActive()) return;
 
-    createChordNote(392.00); // G4
-    createChordNote(493.88); // B4
-    createChordNote(587.33); // D5
-
-    // Fast rhythm pattern
-    const rhythmPattern = () => {
-      if (!this.currentMusic || this.currentMusic.length === 0) return;
-
-      [880, 1046.5, 1318.5, 1046.5].forEach((freq, i) => {
+      melody.forEach(({ freq, time, dur }) => {
         setTimeout(() => {
-          if (!this.currentMusic || this.currentMusic.length === 0) return;
-
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-
-          osc.type = 'triangle';
-          osc.frequency.value = freq;
-
-          gain.gain.setValueAtTime(0.22, this.ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
-
-          osc.connect(gain);
-          gain.connect(this.musicGain);
-
-          osc.start();
-          osc.stop(this.ctx.currentTime + 0.15);
-        }, i * 150);
-      });
-
-      setTimeout(rhythmPattern, 800);
-    };
-
-    this.currentMusic = nodes;
-    rhythmPattern();
-  }
-
-  // Play tense music - super fast and exciting for typing phase!
-  playTenseMusic() {
-    if (!this.ctx || this.isMuted) return;
-    this.stopMusic();
-
-    const nodes = [];
-
-    // Create continuous background chord - D major (energetic)
-    const createChordNote = (freq) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      gain.gain.value = 0.1;
-
-      osc.connect(gain);
-      gain.connect(this.musicGain);
-      osc.start();
-
-      nodes.push(osc);
-    };
-
-    createChordNote(587.33); // D5
-    createChordNote(739.99); // F#5
-    createChordNote(880.00); // A5
-
-    // Very fast pattern
-    const fastPattern = () => {
-      if (!this.currentMusic || this.currentMusic.length === 0) return;
-
-      [1318.5, 1568.0, 1318.5, 1174.7].forEach((freq, i) => {
-        setTimeout(() => {
-          if (!this.currentMusic || this.currentMusic.length === 0) return;
-
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-
-          osc.type = 'triangle';
-          osc.frequency.value = freq;
-
-          gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
-
-          osc.connect(gain);
-          gain.connect(this.musicGain);
-
-          osc.start();
-          osc.stop(this.ctx.currentTime + 0.12);
-        }, i * 100);
-      });
-
-      setTimeout(fastPattern, 500);
-    };
-
-    this.currentMusic = nodes;
-    fastPattern();
-  }
-
-  // Play reveal music - bright, exciting anticipation!
-  playRevealMusic() {
-    if (!this.ctx || this.isMuted) return;
-    this.stopMusic();
-
-    const nodes = [];
-
-    // Create continuous background chord - A major (anticipation)
-    const createChordNote = (freq) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      gain.gain.value = 0.12;
-
-      osc.connect(gain);
-      gain.connect(this.musicGain);
-      osc.start();
-
-      nodes.push(osc);
-    };
-
-    createChordNote(440.00); // A4
-    createChordNote(554.37); // C#5
-    createChordNote(659.25); // E5
-
-    // Exciting drumroll pattern
-    const revealPattern = () => {
-      if (!this.currentMusic || this.currentMusic.length === 0) return;
-
-      [880, 1046.5, 1174.7, 1318.5].forEach((freq, i) => {
-        setTimeout(() => {
-          if (!this.currentMusic || this.currentMusic.length === 0) return;
-
+          if (!isActive()) return;
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
 
@@ -758,21 +649,151 @@ class AudioManager {
           osc.frequency.value = freq;
 
           gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + dur * beatTime);
 
           osc.connect(gain);
           gain.connect(this.musicGain);
-
           osc.start();
-          osc.stop(this.ctx.currentTime + 0.3);
-        }, i * 200);
+          osc.stop(this.ctx.currentTime + dur * beatTime);
+        }, time * beatTime * 1000);
       });
 
-      setTimeout(revealPattern, 1000);
+      // Light percussion
+      for (let i = 0; i < 4; i++) {
+        setTimeout(() => {
+          if (!isActive()) return;
+          this.playPercHit('hat');
+        }, i * beatTime * 1000);
+      }
+
+      setTimeout(playLoop, loopDuration);
     };
 
-    this.currentMusic = nodes;
-    revealPattern();
+    playLoop();
+  }
+
+  // Play tense music - fast and exciting for typing phase!
+  playTenseMusic() {
+    if (!this.ctx || this.isMuted) return;
+    this.stopMusic();
+
+    // Use local flag reference so old loops stop when this specific music is stopped
+    const flag = { active: true };
+    this.currentMusic = [flag];
+    const isActive = () => flag.active;
+
+    const bpm = 180;
+    const beatTime = 60 / bpm;
+
+    // Fast urgent melody
+    const melody = [
+      { freq: 988, time: 0, dur: 0.25 },     // B5
+      { freq: 880, time: 0.25, dur: 0.25 },  // A5
+      { freq: 988, time: 0.5, dur: 0.25 },   // B5
+      { freq: 1175, time: 0.75, dur: 0.25 }, // D6
+      { freq: 988, time: 1, dur: 0.25 },     // B5
+      { freq: 880, time: 1.25, dur: 0.25 },  // A5
+      { freq: 784, time: 1.5, dur: 0.5 },    // G5
+      { freq: 880, time: 2, dur: 0.25 },     // A5
+      { freq: 988, time: 2.25, dur: 0.25 },  // B5
+      { freq: 880, time: 2.5, dur: 0.25 },   // A5
+      { freq: 784, time: 2.75, dur: 0.25 },  // G5
+      { freq: 659, time: 3, dur: 0.5 },      // E5
+      { freq: 784, time: 3.5, dur: 0.5 },    // G5
+    ];
+
+    const loopDuration = 4 * beatTime * 1000;
+
+    const playLoop = () => {
+      if (!isActive()) return;
+
+      melody.forEach(({ freq, time, dur }) => {
+        setTimeout(() => {
+          if (!isActive()) return;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'square';
+          osc.frequency.value = freq;
+
+          gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + dur * beatTime);
+
+          osc.connect(gain);
+          gain.connect(this.musicGain);
+          osc.start();
+          osc.stop(this.ctx.currentTime + dur * beatTime);
+        }, time * beatTime * 1000);
+      });
+
+      // Fast percussion
+      for (let i = 0; i < 8; i++) {
+        setTimeout(() => {
+          if (!isActive()) return;
+          this.playPercHit(i % 2 === 0 ? 'kick' : 'hat');
+        }, i * beatTime * 500);
+      }
+
+      setTimeout(playLoop, loopDuration);
+    };
+
+    playLoop();
+  }
+
+  // Play reveal music - bright, exciting anticipation!
+  playRevealMusic() {
+    if (!this.ctx || this.isMuted) return;
+    this.stopMusic();
+
+    // Use local flag reference so old loops stop when this specific music is stopped
+    const flag = { active: true };
+    this.currentMusic = [flag];
+    const isActive = () => flag.active;
+
+    const bpm = 140;
+    const beatTime = 60 / bpm;
+
+    // Anticipation melody - rising pattern
+    const melody = [
+      { freq: 523, time: 0, dur: 0.5 },      // C5
+      { freq: 587, time: 0.5, dur: 0.5 },    // D5
+      { freq: 659, time: 1, dur: 0.5 },      // E5
+      { freq: 698, time: 1.5, dur: 0.5 },    // F5
+      { freq: 784, time: 2, dur: 0.5 },      // G5
+      { freq: 880, time: 2.5, dur: 0.5 },    // A5
+      { freq: 784, time: 3, dur: 0.25 },     // G5
+      { freq: 880, time: 3.25, dur: 0.25 },  // A5
+      { freq: 988, time: 3.5, dur: 0.5 },    // B5
+    ];
+
+    const loopDuration = 4 * beatTime * 1000;
+
+    const playLoop = () => {
+      if (!isActive()) return;
+
+      melody.forEach(({ freq, time, dur }) => {
+        setTimeout(() => {
+          if (!isActive()) return;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'triangle';
+          osc.frequency.value = freq;
+
+          gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + dur * beatTime);
+
+          osc.connect(gain);
+          gain.connect(this.musicGain);
+          osc.start();
+          osc.stop(this.ctx.currentTime + dur * beatTime);
+        }, time * beatTime * 1000);
+      });
+
+      setTimeout(playLoop, loopDuration);
+    };
+
+    playLoop();
   }
 
   // Crossfade to new music

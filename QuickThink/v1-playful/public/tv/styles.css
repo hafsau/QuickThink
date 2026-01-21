@@ -493,6 +493,7 @@ body {
 .player-card:hover {
   transform: translateY(-5px) scale(1.02);
   background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .player-card.host {
@@ -502,6 +503,10 @@ body {
     0 0 0 0 rgba(251, 191, 36, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
   animation: player-pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), host-glow 2s ease-in-out infinite;
+}
+
+.player-card.host:hover {
+  border-color: var(--accent);
 }
 
 @keyframes player-pop-in {
@@ -550,6 +555,23 @@ body {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 1px;
+}
+
+.make-host-btn {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-light);
+  padding: 5px 12px;
+  border-radius: 15px;
+  margin-top: 8px;
+  display: inline-block;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.player-card:hover .make-host-btn {
+  opacity: 1;
 }
 
 .waiting-text {
@@ -2234,6 +2256,21 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
+}
+
+.settings-option.stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.settings-option.stacked .timer-options {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.settings-option.stacked .toggle-btn {
   width: 100%;
 }
 

@@ -449,6 +449,12 @@ class QuickThinkController {
         this.updateHostUI();
         break;
 
+      case 'PLAYER_JOINED':
+        // Update players list when someone joins
+        this.players = payload.players || [];
+        this.updateHostUI();
+        break;
+
       case 'ERROR':
         console.error('Server error:', payload.message);
         alert(payload.message);

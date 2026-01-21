@@ -1108,7 +1108,7 @@ body {
 
 /* Transfer Host Button */
 .transfer-host-btn {
-  margin-top: 15px;
+  margin-top: 20px;
   padding: 12px 24px;
   border: 2px solid var(--accent);
   border-radius: 12px;
@@ -1118,6 +1118,8 @@ body {
   font-weight: 700;
   font-family: 'Poppins', sans-serif;
   cursor: pointer;
+  position: relative;
+  z-index: 10;
 }
 
 .transfer-host-btn.hidden {

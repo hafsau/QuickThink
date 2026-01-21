@@ -491,8 +491,15 @@ class QuickThinkTV {
       card.innerHTML = `
         <div class="player-avatar" style="background: ${gradients[index % gradients.length]}">${player.name.charAt(0).toUpperCase()}</div>
         <div class="player-name">${player.name}</div>
-        ${player.isHost ? '<div class="host-badge">HOST</div>' : ''}
+        ${player.isHost ? '<div class="host-badge">HOST</div>' : '<div class="make-host-btn">Make Host</div>'}
       `;
+
+      // Add click handler to transfer host (only for non-host players)
+      if (!player.isHost) {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', () => this.transferHost(player.id));
+      }
+
       this.elements.playersGrid.appendChild(card);
     });
 
@@ -533,6 +540,19 @@ class QuickThinkTV {
     };
     console.log('[TV] Sending:', JSON.stringify(message));
     this.ws.send(JSON.stringify(message));
+  }
+
+  transferHost(newHostId) {
+    console.log('[TV] Transferring host to:', newHostId);
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.error('[TV] Cannot transfer host - WebSocket not open!');
+      return;
+    }
+
+    this.ws.send(JSON.stringify({
+      type: 'HOST_TRANSFER',
+      payload: { newHostId }
+    }));
   }
 
   handlePhaseChange(payload) {

@@ -109,6 +109,7 @@ class QuickThinkController {
       playerAvatar: document.getElementById('player-avatar'),
       playerDisplayName: document.getElementById('player-display-name'),
       hostStatus: document.getElementById('host-status'),
+      waitingAnimation: document.querySelector('.waiting-animation'),
 
       readyCategory: document.getElementById('ready-category'),
       readyCountdown: document.getElementById('ready-countdown'),
@@ -829,12 +830,19 @@ class QuickThinkController {
 
   // Host transfer methods
   updateHostUI() {
+    const showTransferBtn = this.isHost && this.players.length > 1;
+
     if (this.elements.transferHostBtn) {
-      if (this.isHost && this.players.length > 1) {
+      if (showTransferBtn) {
         this.elements.transferHostBtn.classList.remove('hidden');
       } else {
         this.elements.transferHostBtn.classList.add('hidden');
       }
+    }
+
+    // Hide waiting animation when transfer button is shown to avoid overlap
+    if (this.elements.waitingAnimation) {
+      this.elements.waitingAnimation.style.display = showTransferBtn ? 'none' : 'flex';
     }
   }
 

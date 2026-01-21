@@ -446,6 +446,7 @@ class QuickThinkController {
 
       case 'PLAYER_UPDATE':
         this.players = payload.players || [];
+        this.updateHostUI();
         break;
 
       case 'ERROR':

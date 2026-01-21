@@ -828,7 +828,7 @@ body {
 }
 
 .category-reminder {
-  font-size: 52px;
+  font-size: 80px;
   font-weight: 800;
   color: var(--text-light);
   text-transform: uppercase;
@@ -894,7 +894,7 @@ body {
 
 .typing-indicators {
   display: flex;
-  gap: 30px;
+  gap: 16px;
   justify-content: center;
   flex-wrap: wrap;
 }
@@ -902,13 +902,13 @@ body {
 .typing-indicator {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
-  padding: 24px 36px;
-  border-radius: 20px;
+  padding: 12px 20px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 10px;
   border: 2px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
 }
 
@@ -928,8 +928,8 @@ body {
 }
 
 .typing-dot {
-  width: 16px;
-  height: 16px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--accent);
   animation: typing-blink 1.2s ease-in-out infinite;
@@ -947,8 +947,8 @@ body {
 }
 
 .typing-name {
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 /* Reveal Screen */

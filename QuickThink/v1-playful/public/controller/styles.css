@@ -1045,8 +1045,17 @@ body {
 
 .settings-option.stacked {
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 12px;
+}
+
+.settings-option.stacked .timer-options {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.settings-option.stacked .toggle-btn {
+  width: 100%;
 }
 
 .settings-option label {

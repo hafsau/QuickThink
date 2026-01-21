@@ -42,6 +42,12 @@ class GameState {
     this.players = new Map(); // playerId -> { id, name, ws }
     this.hostId = null;
 
+    // Configurable settings
+    this.settings = {
+      musicEnabled: true,
+      typingTime: 10  // seconds: 5, 10, or 15
+    };
+
     // Game settings
     this.totalRounds = GAME_LENGTHS.standard;
     this.currentRound = 0;
@@ -104,6 +110,26 @@ class GameState {
     }
   }
 
+  // Transfer host to another player
+  transferHost(newHostId) {
+    if (!this.players.has(newHostId)) {
+      return { success: false, error: 'Player not found' };
+    }
+    this.hostId = newHostId;
+    return { success: true };
+  }
+
+  // Update game settings
+  updateSettings(newSettings) {
+    if (newSettings.typingTime !== undefined && [5, 10, 15].includes(newSettings.typingTime)) {
+      this.settings.typingTime = newSettings.typingTime;
+    }
+    if (typeof newSettings.musicEnabled === 'boolean') {
+      this.settings.musicEnabled = newSettings.musicEnabled;
+    }
+    return { success: true, settings: this.settings };
+  }
+
   // Start the game
   startGame(gameLength = 'standard') {
     if (this.players.size < 2) {
@@ -141,7 +167,7 @@ class GameState {
   // Move to typing phase
   startTyping() {
     this.phase = PHASES.TYPING;
-    this.timerValue = 10;
+    this.timerValue = this.settings.typingTime;
   }
 
   // Submit an answer
@@ -401,7 +427,8 @@ class GameState {
       currentCategory: this.currentCategory,
       timerValue: this.timerValue,
       scores: { ...this.scores },
-      hostId: this.hostId
+      hostId: this.hostId,
+      settings: { ...this.settings }
     };
   }
 }

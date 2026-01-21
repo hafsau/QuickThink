@@ -43,6 +43,8 @@ class QuickThinkController {
     this.entries = []; // Array of current round entries
     this.reconnectTimer = null;
     this.connectionAttempts = 0;
+    this.settings = { musicEnabled: true, typingTime: 10 };
+    this.players = []; // List of players for host transfer
 
     this.init();
   }
@@ -51,21 +53,22 @@ class QuickThinkController {
     this.getRoomCode();
     this.bindElements();
     this.bindEvents();
+    // Start with splash screen - WebSocket connection happens after splash
+  }
 
+  setupJoinScreen() {
     if (this.roomCode) {
       // Room code from URL - hide room code input
       this.elements.roomCodeInput.style.display = 'none';
       this.elements.joinBtn.textContent = 'CONNECTING...';
       this.elements.joinBtn.disabled = true;
-      this.connectWebSocket();
     } else {
       // No room code - show input for manual entry
       this.elements.roomCodeInput.style.display = 'block';
       this.elements.joinBtn.textContent = 'JOIN GAME';
       this.elements.joinBtn.disabled = true;
-      // Still connect WebSocket so we're ready when they enter code
-      this.connectWebSocket();
     }
+    this.connectWebSocket();
   }
 
   getRoomCode() {
@@ -84,6 +87,7 @@ class QuickThinkController {
 
   bindElements() {
     this.screens = {
+      splash: document.getElementById('splash-screen'),
       join: document.getElementById('join-screen'),
       waiting: document.getElementById('waiting-screen'),
       ready: document.getElementById('ready-screen'),
@@ -131,7 +135,24 @@ class QuickThinkController {
       voteValidBtn: document.getElementById('vote-valid-btn'),
       voteInvalidBtn: document.getElementById('vote-invalid-btn'),
       voteSubmittedMsg: document.getElementById('vote-submitted-msg'),
-      ownAnswerMsg: document.getElementById('own-answer-msg')
+      ownAnswerMsg: document.getElementById('own-answer-msg'),
+
+      // Settings elements
+      settingsBtn: document.getElementById('settings-btn'),
+      settingsPanel: document.getElementById('settings-panel'),
+      closeSettingsBtn: document.getElementById('close-settings-btn'),
+      musicToggle: document.getElementById('music-toggle'),
+      timerBtns: document.querySelectorAll('.timer-btn'),
+
+      // Host transfer elements
+      transferHostBtn: document.getElementById('transfer-host-btn'),
+      transferModal: document.getElementById('transfer-modal'),
+      closeTransferBtn: document.getElementById('close-transfer-btn'),
+      playerList: document.getElementById('player-list'),
+
+      // Splash screen elements
+      splashContinueBtn: document.getElementById('splash-continue-btn'),
+      splashSkipBtn: document.getElementById('splash-skip-btn')
     };
   }
 
@@ -182,6 +203,50 @@ class QuickThinkController {
     // Vote buttons
     this.elements.voteValidBtn.addEventListener('click', () => this.submitVote('valid'));
     this.elements.voteInvalidBtn.addEventListener('click', () => this.submitVote('invalid'));
+
+    // Settings events
+    if (this.elements.settingsBtn) {
+      this.elements.settingsBtn.addEventListener('click', () => this.toggleSettings());
+    }
+    if (this.elements.closeSettingsBtn) {
+      this.elements.closeSettingsBtn.addEventListener('click', () => this.closeSettings());
+    }
+    if (this.elements.musicToggle) {
+      this.elements.musicToggle.addEventListener('click', () => {
+        this.settings.musicEnabled = !this.settings.musicEnabled;
+        this.updateSettings();
+      });
+    }
+    if (this.elements.timerBtns) {
+      this.elements.timerBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          this.settings.typingTime = parseInt(btn.dataset.time);
+          this.updateSettings();
+        });
+      });
+    }
+
+    // Host transfer events
+    if (this.elements.transferHostBtn) {
+      this.elements.transferHostBtn.addEventListener('click', () => this.showTransferModal());
+    }
+    if (this.elements.closeTransferBtn) {
+      this.elements.closeTransferBtn.addEventListener('click', () => this.closeTransferModal());
+    }
+
+    // Splash screen events
+    if (this.elements.splashContinueBtn) {
+      this.elements.splashContinueBtn.addEventListener('click', () => this.dismissSplash());
+    }
+    if (this.elements.splashSkipBtn) {
+      this.elements.splashSkipBtn.addEventListener('click', () => this.dismissSplash());
+    }
+  }
+
+  dismissSplash() {
+    // Transition to join screen and set it up
+    this.showScreen('join');
+    this.setupJoinScreen();
   }
 
   // Simple check if WebSocket is ready
@@ -353,6 +418,18 @@ class QuickThinkController {
         this.resetGame();
         break;
 
+      case 'SETTINGS_CHANGED':
+        this.applySettings(payload);
+        break;
+
+      case 'HOST_CHANGED':
+        this.onHostChanged(payload);
+        break;
+
+      case 'PLAYER_UPDATE':
+        this.players = payload.players || [];
+        break;
+
       case 'ERROR':
         console.error('Server error:', payload.message);
         alert(payload.message);
@@ -367,10 +444,19 @@ class QuickThinkController {
   onJoined(payload) {
     this.playerId = payload.playerId;
     this.isHost = payload.isHost;
+    this.players = payload.players || [];
 
     this.elements.playerAvatar.textContent = this.playerName.charAt(0).toUpperCase();
     this.elements.playerDisplayName.textContent = this.playerName;
     this.elements.hostStatus.textContent = this.isHost ? 'You are the host!' : 'Waiting for host to start...';
+
+    // Show/hide host transfer button
+    this.updateHostUI();
+
+    // Apply settings if provided
+    if (payload.settings) {
+      this.applySettings(payload.settings);
+    }
 
     this.showScreen('waiting');
   }
@@ -673,6 +759,119 @@ class QuickThinkController {
     this.myScore = 0;
     this.clearEntries();
     this.showScreen('waiting');
+  }
+
+  // Settings methods
+  toggleSettings() {
+    if (this.elements.settingsPanel) {
+      this.elements.settingsPanel.classList.toggle('hidden');
+    }
+  }
+
+  closeSettings() {
+    if (this.elements.settingsPanel) {
+      this.elements.settingsPanel.classList.add('hidden');
+    }
+  }
+
+  updateSettings() {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'UPDATE_SETTINGS',
+        payload: this.settings
+      }));
+    }
+    // Optimistically update UI
+    this.applySettings(this.settings);
+  }
+
+  applySettings(settings) {
+    this.settings = { ...settings };
+
+    // Update music toggle button
+    if (this.elements.musicToggle) {
+      this.elements.musicToggle.classList.toggle('active', settings.musicEnabled);
+      this.elements.musicToggle.textContent = settings.musicEnabled ? 'ON' : 'OFF';
+    }
+
+    // Update timer buttons
+    if (this.elements.timerBtns) {
+      this.elements.timerBtns.forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.time) === settings.typingTime);
+      });
+    }
+  }
+
+  // Host transfer methods
+  updateHostUI() {
+    if (this.elements.transferHostBtn) {
+      if (this.isHost && this.players.length > 1) {
+        this.elements.transferHostBtn.classList.remove('hidden');
+      } else {
+        this.elements.transferHostBtn.classList.add('hidden');
+      }
+    }
+  }
+
+  onHostChanged(payload) {
+    const wasHost = this.isHost;
+    this.isHost = payload.newHostId === this.playerId;
+    this.players = payload.players || this.players;
+
+    // Update host status display
+    this.elements.hostStatus.textContent = this.isHost ? 'You are the host!' : 'Waiting for host to start...';
+
+    // Show/hide transfer button
+    this.updateHostUI();
+
+    // Close transfer modal if open
+    this.closeTransferModal();
+
+    // Notify if host status changed
+    if (this.isHost && !wasHost) {
+      // Became host
+      this.elements.hostStatus.classList.add('highlight');
+      setTimeout(() => {
+        this.elements.hostStatus.classList.remove('highlight');
+      }, 2000);
+    }
+  }
+
+  showTransferModal() {
+    if (!this.elements.transferModal || !this.elements.playerList) return;
+
+    // Populate player list (exclude self)
+    this.elements.playerList.innerHTML = '';
+    this.players
+      .filter(p => p.id !== this.playerId)
+      .forEach(player => {
+        const btn = document.createElement('button');
+        btn.className = 'player-select-btn';
+        btn.innerHTML = `
+          <span class="player-avatar-small">${player.name.charAt(0).toUpperCase()}</span>
+          <span>${player.name}</span>
+        `;
+        btn.addEventListener('click', () => this.transferHost(player.id));
+        this.elements.playerList.appendChild(btn);
+      });
+
+    this.elements.transferModal.classList.remove('hidden');
+  }
+
+  closeTransferModal() {
+    if (this.elements.transferModal) {
+      this.elements.transferModal.classList.add('hidden');
+    }
+  }
+
+  transferHost(newHostId) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'HOST_TRANSFER',
+        payload: { newHostId }
+      }));
+    }
+    this.closeTransferModal();
   }
 
   showVoting(payload) {

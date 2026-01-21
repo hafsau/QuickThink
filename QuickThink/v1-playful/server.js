@@ -203,7 +203,7 @@ function runTyping(roomCode) {
   if (!room) return;
 
   room.startTyping();
-  let remaining = 10;
+  let remaining = room.settings.typingTime; // Use dynamic typing time from settings
 
   broadcast(roomCode, {
     type: 'PHASE_CHANGE',
@@ -531,7 +531,9 @@ wss.on('connection', (ws, req) => {
             playerId,
             playerName,
             roomCode,
-            isHost: room.hostId === playerId
+            isHost: room.hostId === playerId,
+            players: room.getPlayerList(),
+            settings: room.settings
           }
         });
 
@@ -720,6 +722,62 @@ wss.on('connection', (ws, req) => {
             type: 'ERROR',
             payload: { message: result.error }
           });
+        }
+        break;
+      }
+
+      case 'UPDATE_SETTINGS': {
+        // Update game settings (music, typing time)
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        // Only host or TV can update settings in lobby
+        if (room.phase !== PHASES.LOBBY) {
+          sendTo(ws, { type: 'ERROR', payload: { message: 'Can only change settings in lobby' } });
+          return;
+        }
+
+        if (playerId !== room.hostId && !isTV) {
+          sendTo(ws, { type: 'ERROR', payload: { message: 'Only host can change settings' } });
+          return;
+        }
+
+        const result = room.updateSettings(payload);
+        if (result.success) {
+          broadcast(roomCode, {
+            type: 'SETTINGS_CHANGED',
+            payload: result.settings
+          });
+        }
+        break;
+      }
+
+      case 'HOST_TRANSFER': {
+        // Transfer host to another player
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        // Only current host or TV can transfer
+        if (playerId !== room.hostId && !isTV) {
+          sendTo(ws, { type: 'ERROR', payload: { message: 'Only host can transfer' } });
+          return;
+        }
+
+        const newHostId = payload.newHostId;
+        const result = room.transferHost(newHostId);
+
+        if (result.success) {
+          const newHost = room.players.get(newHostId);
+          broadcast(roomCode, {
+            type: 'HOST_CHANGED',
+            payload: {
+              newHostId,
+              newHostName: newHost ? newHost.name : 'Unknown',
+              players: room.getPlayerList()
+            }
+          });
+        } else {
+          sendTo(ws, { type: 'ERROR', payload: { message: result.error } });
         }
         break;
       }

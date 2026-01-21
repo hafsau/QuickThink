@@ -17,7 +17,7 @@ class QuickThinkTV {
     this.createFloatingShapes();
     this.bindElements();
     this.bindEvents();
-    this.createRoom();
+    // Start with splash screen - room creation happens after splash
   }
 
   // Create floating 3D geometric shapes for background
@@ -90,6 +90,7 @@ class QuickThinkTV {
   bindElements() {
     // Screens
     this.screens = {
+      splash: document.getElementById('splash-screen'),
       loading: document.getElementById('loading-screen'),
       lobby: document.getElementById('lobby-screen'),
       category: document.getElementById('category-screen'),
@@ -151,7 +152,29 @@ class QuickThinkTV {
       winnerName: document.getElementById('winner-name'),
       finalScores: document.getElementById('final-scores'),
       playAgainBtn: document.getElementById('play-again-btn'),
-      confetti: document.getElementById('confetti')
+      confetti: document.getElementById('confetti'),
+
+      // Settings elements
+      settingsBtn: document.getElementById('settings-btn'),
+      settingsPanel: document.getElementById('settings-panel'),
+      closeSettingsBtn: document.getElementById('close-settings-btn'),
+      musicToggle: document.getElementById('music-toggle'),
+      timerBtns: document.querySelectorAll('.timer-btn'),
+
+      // Splash screen elements
+      splashContinueBtn: document.getElementById('splash-continue-btn'),
+      splashSkipBtn: document.getElementById('splash-skip-btn'),
+
+      // Persistent QR elements
+      persistentQr: document.getElementById('persistent-qr'),
+      persistentQrImg: document.getElementById('persistent-qr-img'),
+      persistentQrCode: document.getElementById('persistent-qr-code')
+    };
+
+    // Settings state
+    this.settings = {
+      musicEnabled: true,
+      typingTime: 10
     };
   }
 
@@ -193,6 +216,68 @@ class QuickThinkTV {
     };
     document.addEventListener('click', initAudioOnInteraction);
     document.addEventListener('keydown', initAudioOnInteraction);
+
+    // Settings panel events
+    this.elements.settingsBtn.addEventListener('click', () => this.toggleSettings());
+    this.elements.closeSettingsBtn.addEventListener('click', () => this.closeSettings());
+
+    // Music toggle
+    this.elements.musicToggle.addEventListener('click', () => {
+      this.settings.musicEnabled = !this.settings.musicEnabled;
+      this.elements.musicToggle.classList.toggle('active', this.settings.musicEnabled);
+      this.elements.musicToggle.textContent = this.settings.musicEnabled ? 'ON' : 'OFF';
+
+      // Update audio
+      if (this.settings.musicEnabled) {
+        audioManager.unmuteMusic();
+      } else {
+        audioManager.muteMusic();
+      }
+
+      // Send to server
+      this.updateSettings();
+    });
+
+    // Timer buttons
+    this.elements.timerBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        this.elements.timerBtns.forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        this.settings.typingTime = parseInt(e.target.dataset.time);
+        this.updateSettings();
+      });
+    });
+
+    // Splash screen buttons
+    if (this.elements.splashContinueBtn) {
+      this.elements.splashContinueBtn.addEventListener('click', () => this.dismissSplash());
+    }
+    if (this.elements.splashSkipBtn) {
+      this.elements.splashSkipBtn.addEventListener('click', () => this.dismissSplash());
+    }
+  }
+
+  dismissSplash() {
+    // Transition to loading screen and create room
+    this.showScreen('loading');
+    this.createRoom();
+  }
+
+  toggleSettings() {
+    this.elements.settingsPanel.classList.toggle('hidden');
+  }
+
+  closeSettings() {
+    this.elements.settingsPanel.classList.add('hidden');
+  }
+
+  updateSettings() {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'UPDATE_SETTINGS',
+        payload: this.settings
+      }));
+    }
   }
 
   async createRoom() {
@@ -207,6 +292,9 @@ class QuickThinkTV {
 
       this.elements.roomCode.textContent = this.roomCode;
       this.elements.qrCode.src = qrData.qrDataUrl;
+
+      // Set up persistent QR code for gameplay
+      this.setPersistentQr();
 
       this.connectWebSocket();
     } catch (error) {
@@ -311,9 +399,36 @@ class QuickThinkTV {
         this.showVoteResult(payload);
         break;
 
+      case 'SETTINGS_CHANGED':
+        this.applySettings(payload);
+        break;
+
+      case 'HOST_CHANGED':
+        this.updatePlayers(payload.players);
+        break;
+
       case 'ERROR':
         console.error('Server error:', payload.message);
         break;
+    }
+  }
+
+  applySettings(settings) {
+    this.settings = { ...settings };
+
+    // Update UI
+    this.elements.musicToggle.classList.toggle('active', settings.musicEnabled);
+    this.elements.musicToggle.textContent = settings.musicEnabled ? 'ON' : 'OFF';
+
+    this.elements.timerBtns.forEach(btn => {
+      btn.classList.toggle('active', parseInt(btn.dataset.time) === settings.typingTime);
+    });
+
+    // Update audio
+    if (settings.musicEnabled) {
+      audioManager.unmuteMusic();
+    } else {
+      audioManager.muteMusic();
     }
   }
 
@@ -323,6 +438,11 @@ class QuickThinkTV {
     console.log('[TV] updateRoomState - player count:', this.players.length);
     this.updatePlayersDisplay();
     this.updateStartButton();
+
+    // Apply initial settings from server
+    if (state.settings) {
+      this.applySettings(state.settings);
+    }
   }
 
   updatePlayers(players) {
@@ -417,6 +537,8 @@ class QuickThinkTV {
 
       case 'LOCKED':
         audioManager.playBuzzer();
+        // Add screen shake effect
+        this.triggerScreenShake();
         break;
 
       case 'REVEAL':
@@ -823,6 +945,87 @@ class QuickThinkTV {
 
     this.showScreen('gameover');
     this.launchConfetti();
+    this.createSparkles();
+    this.launchFireworks();
+  }
+
+  createSparkles() {
+    const sparklesContainer = document.getElementById('sparkles');
+    if (!sparklesContainer) return;
+
+    sparklesContainer.innerHTML = '';
+    const numSparkles = 12;
+
+    for (let i = 0; i < numSparkles; i++) {
+      const sparkle = document.createElement('div');
+      sparkle.className = 'sparkle';
+
+      const angle = (i / numSparkles) * Math.PI * 2;
+      const radius = 70 + Math.random() * 30;
+      const x = 100 + Math.cos(angle) * radius;
+      const y = 100 + Math.sin(angle) * radius;
+
+      sparkle.style.left = `${x}px`;
+      sparkle.style.top = `${y}px`;
+      sparkle.style.animationDelay = `${Math.random() * 1.5}s`;
+      sparkle.style.animationDuration = `${1 + Math.random() * 0.5}s`;
+
+      sparklesContainer.appendChild(sparkle);
+    }
+  }
+
+  launchFireworks() {
+    const fireworksContainer = document.getElementById('fireworks');
+    if (!fireworksContainer) return;
+
+    const colors = ['#FBBF24', '#F97316', '#EF4444', '#EC4899', '#A855F7', '#6366F1', '#06B6D4', '#10B981'];
+
+    const createFireworkBurst = (x, y) => {
+      const numParticles = 20;
+      for (let i = 0; i < numParticles; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'firework';
+
+        const angle = (i / numParticles) * Math.PI * 2;
+        const distance = 80 + Math.random() * 60;
+        const fx = Math.cos(angle) * distance;
+        const fy = Math.sin(angle) * distance;
+
+        particle.style.left = `${x}px`;
+        particle.style.top = `${y}px`;
+        particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+        particle.style.setProperty('--fx', `${fx}px`);
+        particle.style.setProperty('--fy', `${fy}px`);
+        particle.style.boxShadow = `0 0 6px ${particle.style.background}`;
+
+        fireworksContainer.appendChild(particle);
+
+        setTimeout(() => particle.remove(), 1000);
+      }
+    };
+
+    // Launch multiple fireworks over time
+    const launchSequence = [
+      { delay: 300, x: window.innerWidth * 0.2, y: window.innerHeight * 0.3 },
+      { delay: 600, x: window.innerWidth * 0.8, y: window.innerHeight * 0.25 },
+      { delay: 900, x: window.innerWidth * 0.5, y: window.innerHeight * 0.2 },
+      { delay: 1200, x: window.innerWidth * 0.3, y: window.innerHeight * 0.35 },
+      { delay: 1500, x: window.innerWidth * 0.7, y: window.innerHeight * 0.3 },
+      { delay: 2000, x: window.innerWidth * 0.4, y: window.innerHeight * 0.25 },
+      { delay: 2500, x: window.innerWidth * 0.6, y: window.innerHeight * 0.35 },
+    ];
+
+    launchSequence.forEach(({ delay, x, y }) => {
+      setTimeout(() => createFireworkBurst(x, y), delay);
+    });
+  }
+
+  triggerScreenShake() {
+    const typingScreen = this.screens.typing;
+    if (typingScreen) {
+      typingScreen.classList.add('screen-shake');
+      setTimeout(() => typingScreen.classList.remove('screen-shake'), 500);
+    }
   }
 
   launchConfetti() {
@@ -875,6 +1078,32 @@ class QuickThinkTV {
     if (this.screens[screenName]) {
       this.screens[screenName].classList.add('active');
     }
+
+    // Manage persistent QR visibility
+    this.updatePersistentQr(screenName);
+  }
+
+  updatePersistentQr(screenName) {
+    if (!this.elements.persistentQr) return;
+
+    // Hide on splash, loading, lobby, and gameover screens
+    const hideOnScreens = ['splash', 'loading', 'lobby', 'gameover'];
+    if (hideOnScreens.includes(screenName)) {
+      this.elements.persistentQr.classList.add('hidden');
+    } else {
+      this.elements.persistentQr.classList.remove('hidden');
+    }
+  }
+
+  setPersistentQr() {
+    if (!this.elements.persistentQrImg || !this.elements.persistentQrCode) return;
+
+    // Use the same QR code as the lobby
+    const qrUrl = this.elements.qrCode?.src;
+    if (qrUrl) {
+      this.elements.persistentQrImg.src = qrUrl;
+    }
+    this.elements.persistentQrCode.textContent = this.roomCode || '----';
   }
 }
 

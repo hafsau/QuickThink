@@ -128,6 +128,20 @@ class AudioManager {
     return this.isMuted;
   }
 
+  // Mute just music (keeps SFX)
+  muteMusic() {
+    if (this.musicGain) {
+      this.musicGain.gain.value = 0;
+    }
+  }
+
+  // Unmute music
+  unmuteMusic() {
+    if (this.musicGain) {
+      this.musicGain.gain.value = this.volumes.music;
+    }
+  }
+
   // Set volume (0-1)
   setVolume(type, value) {
     this.volumes[type] = Math.max(0, Math.min(1, value));

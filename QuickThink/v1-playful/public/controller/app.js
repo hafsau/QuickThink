@@ -152,7 +152,7 @@ class QuickThinkController {
 
       // Splash screen elements
       splashContinueBtn: document.getElementById('splash-continue-btn'),
-      splashSkipBtn: document.getElementById('splash-skip-btn')
+      splashCountdown: document.getElementById('splash-countdown')
     };
   }
 
@@ -238,12 +238,30 @@ class QuickThinkController {
     if (this.elements.splashContinueBtn) {
       this.elements.splashContinueBtn.addEventListener('click', () => this.dismissSplash());
     }
-    if (this.elements.splashSkipBtn) {
-      this.elements.splashSkipBtn.addEventListener('click', () => this.dismissSplash());
-    }
+
+    // Start splash auto-advance countdown
+    this.startSplashCountdown();
+  }
+
+  startSplashCountdown() {
+    this.splashCountdownValue = 10;
+    this.splashCountdownTimer = setInterval(() => {
+      this.splashCountdownValue--;
+      if (this.elements.splashCountdown) {
+        this.elements.splashCountdown.textContent = this.splashCountdownValue;
+      }
+      if (this.splashCountdownValue <= 0) {
+        this.dismissSplash();
+      }
+    }, 1000);
   }
 
   dismissSplash() {
+    // Clear the countdown timer
+    if (this.splashCountdownTimer) {
+      clearInterval(this.splashCountdownTimer);
+      this.splashCountdownTimer = null;
+    }
     // Transition to join screen and set it up
     this.showScreen('join');
     this.setupJoinScreen();

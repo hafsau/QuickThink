@@ -2328,10 +2328,16 @@ body {
 }
 
 .logo-bolt {
-  font-size: 80px;
   display: block;
   margin-bottom: 20px;
   animation: boltPulse 2s ease-in-out infinite;
+  color: var(--accent);
+  filter: drop-shadow(0 0 20px rgba(251, 191, 36, 0.6));
+}
+
+.logo-bolt svg {
+  width: 80px;
+  height: 80px;
 }
 
 .splash-title {
@@ -2370,7 +2376,13 @@ body {
 }
 
 .step-icon {
-  font-size: 60px;
+  color: var(--primary);
+  filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.4));
+}
+
+.step-icon svg {
+  width: 48px;
+  height: 48px;
 }
 
 .step-text {
@@ -2416,23 +2428,16 @@ body {
   box-shadow: 0 15px 50px rgba(16, 185, 129, 0.5);
 }
 
-.splash-skip-btn {
-  padding: 12px 30px;
+.splash-auto-advance {
   font-size: 16px;
-  font-weight: 600;
-  font-family: 'Poppins', sans-serif;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  background: transparent;
   color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.3s ease;
+  margin-top: 20px;
   animation: btnEntry 1s ease-out 0.8s both;
 }
 
-.splash-skip-btn:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  color: var(--text-light);
+.splash-auto-advance span {
+  font-weight: 700;
+  color: var(--accent);
 }
 
 @keyframes splashLogoEntry {

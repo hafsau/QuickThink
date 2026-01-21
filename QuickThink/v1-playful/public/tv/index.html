@@ -75,28 +75,51 @@
     <div id="splash-screen" class="screen active">
       <div class="splash-content">
         <div class="splash-logo">
-          <span class="logo-bolt">⚡</span>
+          <div class="logo-bolt">
+            <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+          </div>
           <h1 class="splash-title">QUICK THINK</h1>
           <p class="splash-tagline">The party game of fast thinking!</p>
         </div>
 
         <div class="tutorial-steps">
           <div class="tutorial-step">
-            <div class="step-icon">📋</div>
+            <div class="step-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="9" x2="15" y2="9"></line>
+                <line x1="9" y1="13" x2="15" y2="13"></line>
+                <line x1="9" y1="17" x2="12" y2="17"></line>
+              </svg>
+            </div>
             <div class="step-text">
               <div class="step-number">1</div>
               <p>A category appears</p>
             </div>
           </div>
           <div class="tutorial-step">
-            <div class="step-icon">⌨️</div>
+            <div class="step-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+                <path d="M2 2l7.586 7.586"></path>
+                <circle cx="11" cy="11" r="2"></circle>
+              </svg>
+            </div>
             <div class="step-text">
               <div class="step-number">2</div>
               <p>Type your answers fast!</p>
             </div>
           </div>
           <div class="tutorial-step">
-            <div class="step-icon">🏆</div>
+            <div class="step-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="8" r="6"></circle>
+                <path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"></path>
+              </svg>
+            </div>
             <div class="step-text">
               <div class="step-number">3</div>
               <p>Unique answers score points</p>
@@ -105,7 +128,7 @@
         </div>
 
         <button id="splash-continue-btn" class="splash-btn">LET'S PLAY!</button>
-        <button id="splash-skip-btn" class="splash-skip-btn">Skip intro</button>
+        <p class="splash-auto-advance">Starting in <span id="splash-countdown">10</span>s...</p>
       </div>
     </div>
 

@@ -163,7 +163,7 @@ class QuickThinkTV {
 
       // Splash screen elements
       splashContinueBtn: document.getElementById('splash-continue-btn'),
-      splashSkipBtn: document.getElementById('splash-skip-btn'),
+      splashCountdown: document.getElementById('splash-countdown'),
 
       // Persistent QR elements
       persistentQr: document.getElementById('persistent-qr'),
@@ -252,12 +252,30 @@ class QuickThinkTV {
     if (this.elements.splashContinueBtn) {
       this.elements.splashContinueBtn.addEventListener('click', () => this.dismissSplash());
     }
-    if (this.elements.splashSkipBtn) {
-      this.elements.splashSkipBtn.addEventListener('click', () => this.dismissSplash());
-    }
+
+    // Start splash auto-advance countdown
+    this.startSplashCountdown();
+  }
+
+  startSplashCountdown() {
+    this.splashCountdownValue = 10;
+    this.splashCountdownTimer = setInterval(() => {
+      this.splashCountdownValue--;
+      if (this.elements.splashCountdown) {
+        this.elements.splashCountdown.textContent = this.splashCountdownValue;
+      }
+      if (this.splashCountdownValue <= 0) {
+        this.dismissSplash();
+      }
+    }, 1000);
   }
 
   dismissSplash() {
+    // Clear the countdown timer
+    if (this.splashCountdownTimer) {
+      clearInterval(this.splashCountdownTimer);
+      this.splashCountdownTimer = null;
+    }
     // Transition to loading screen and create room
     this.showScreen('loading');
     this.createRoom();

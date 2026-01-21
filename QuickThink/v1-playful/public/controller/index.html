@@ -15,7 +15,11 @@
     <div id="splash-screen" class="screen active">
       <div class="splash-content">
         <div class="splash-logo">
-          <span class="logo-bolt">⚡</span>
+          <div class="logo-bolt">
+            <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+          </div>
           <h1 class="splash-title">QUICK THINK</h1>
           <p class="splash-tagline">The party game of fast thinking!</p>
         </div>
@@ -36,7 +40,7 @@
         </div>
 
         <button id="splash-continue-btn" class="splash-btn">LET'S PLAY!</button>
-        <button id="splash-skip-btn" class="splash-skip-btn">Skip intro</button>
+        <p class="splash-auto-advance">Starting in <span id="splash-countdown">10</span>s...</p>
       </div>
     </div>
 
